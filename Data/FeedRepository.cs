@@ -130,6 +130,19 @@ namespace FeedGem.Data
 
             await command.ExecuteNonQueryAsync();
         }
+
+        // 記事を既読状態（is_read = 1）に更新する
+        public async Task MarkAsReadAsync(string url)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string updateQuery = "UPDATE entries SET is_read = 1 WHERE url = @url";
+            using var command = new SqliteCommand(updateQuery, connection);
+            command.Parameters.AddWithValue("@url", url);
+
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     // 内部管理用のシンプルなクラス

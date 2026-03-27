@@ -98,11 +98,18 @@ namespace FeedGem
         #region --- UIイベントハンドラ ---
 
         // リスト内の記事選択が変更された際のイベントハンドラ
-        private void ArticleListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private async void ArticleListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             // 選択項目がArticleItem型であるか判定
             if (ArticleListView.SelectedItem is ArticleItem selectedArticle)
             {
+                // 未読の場合のみ既読処理を実行
+                if (!selectedArticle.IsRead)
+                {
+                    selectedArticle.IsRead = true; // モデルのプロパティを更新（UIの色が変わる）
+                    await _repository.MarkAsReadAsync(selectedArticle.Url); // データベースを更新
+                }
+
                 // プレビュー用のHTML文字列を生成
                 string html = $@"
                     <html>

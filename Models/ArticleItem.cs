@@ -1,21 +1,38 @@
+using System;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+
 namespace FeedGem.Models
 {
     // 記事リスト（中央ペイン）に表示するためのデータモデル
-    public class ArticleItem
+    public class ArticleItem : INotifyPropertyChanged
     {
-        // 記事のタイトル
         public string Title { get; set; } = "";
-        
-        // 投稿日時（yyyy/MM/dd HH:mm 形式）
         public string Date { get; set; } = "";
-        
-        // 記事のURL（ブラウザで開く際に使用） 
         public string Url { get; set; } = "";
-        
-        // 記事の要約または本文（プレビューで使用） 
         public string Summary { get; set; } = "";
+
+        private bool _isRead = false;
         
-        // 未読・既読の判定フラグ（0: 未読, 1: 既読）
-        public bool IsRead { get; set; } = false;
+        // 未読・既読の判定フラグ（false: 未読, true: 既読）
+        public bool IsRead
+        {
+            get => _isRead;
+            set
+            {
+                if (_isRead != value)
+                {
+                    _isRead = value;
+                    OnPropertyChanged(); // 値が変化したらUIへ通知
+                }
+            }
+        }
+        public event PropertyChangedEventHandler? PropertyChanged;
+
+        // プロパティ変更イベントを発火させるヘルパーメソッド
+        protected void OnPropertyChanged([CallerMemberName] string? name = null)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
     }
 }

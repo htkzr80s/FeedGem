@@ -24,7 +24,26 @@
             <ListView x:Name="ArticleListView" Grid.Column="2" Margin="5" SelectionChanged="ArticleListView_SelectionChanged">
                 <ListView.View>
                     <GridView>
-                        <GridViewColumn Header="タイトル" Width="200" DisplayMemberBinding="{Binding Title}"/>
+                        <GridViewColumn Header="タイトル" Width="200">
+                            <GridViewColumn.CellTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Title}">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                <Setter Property="Foreground" Value="Black"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsRead}" Value="True">
+                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                        <Setter Property="Foreground" Value="Gray"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </GridViewColumn.CellTemplate>
+                        </GridViewColumn>
                         <GridViewColumn Header="投稿日時" Width="100" DisplayMemberBinding="{Binding Date}"/>
                     </GridView>
                 </ListView.View>
