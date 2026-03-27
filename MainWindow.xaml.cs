@@ -1,5 +1,8 @@
-﻿using HtmlAgilityPack;
+﻿using FeedGem.Data;
+using FeedGem.Models;
+using HtmlAgilityPack;
 using Microsoft.Data.Sqlite;
+using Microsoft.VisualBasic;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -11,11 +14,10 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml;
-using FeedGem.Models;
-using FeedGem.Data;
 
 namespace FeedGem
 {
@@ -110,6 +112,11 @@ namespace FeedGem
                     await _repository.MarkAsReadAsync(selectedArticle.Url); // データベースを更新
                 }
 
+                // Summaryが空の場合の対策
+                string displayContent = string.IsNullOrWhiteSpace(selectedArticle.Summary)
+                    ? "（詳細情報の取得に失敗したか、要約のない記事です。下のボタンから直接サイトを確認してください。）"
+                    : selectedArticle.Summary;
+
                 // プレビュー用のHTML文字列を生成
                 string html = $@"
                     <html>
@@ -157,13 +164,133 @@ namespace FeedGem
             if (e.Key == Key.Enter)
             {
                 string url = SearchBox.Text.Trim();
-                // ヒント文字ではない、かつ空でない場合のみ実行
-                if (!string.IsNullOrEmpty(url) && url != "URLを入力してEnter...")
+                if (string.IsNullOrEmpty(url)) return;
+
+                // フィードの探索（既存のロジック）
+                var candidates = await DiscoverFeedsAsync(url);
+
+                bool added = false; // 追加が行われたかを判定するフラグ
+
+                if (candidates.Count == 1)
                 {
-                    SearchBox.IsEnabled = false; // 処理中は入力を無効化
-                    await DiscoverAndAddFeedAsync(url); // フィード探索を開始
-                    SearchBox.IsEnabled = true;
-                    SearchBox.Text = ""; // 終わったら入力欄を空にする
+                    // 1つだけ見つかった場合はそのまま登録
+                    var selected = candidates[0];
+                    await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+
+                    // 登録直後に記事をダウンロードする
+                    await FetchAndSaveEntriesAsync(selected.Url);
+
+                    // ツリービューを更新
+                    await LoadFeedsToTreeViewAsync();
+                    added = true;
+                }
+                else if (candidates.Count > 1)
+                {
+                    // 複数見つかった場合は選択ウィンドウを表示
+                    var selectionWindow = new FeedSelectionWindow(candidates) { Owner = this };
+
+                    if (selectionWindow.ShowDialog() == true)
+                    {
+                        foreach (var selected in selectionWindow.SelectedFeeds)
+                        {
+                            await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+                            // 選択されたものそれぞれをダウンロード
+                            await FetchAndSaveEntriesAsync(selected.Url);
+                        }
+                        await LoadFeedsToTreeViewAsync();
+                        added = true;
+                    }
+
+                    if (added)
+                    {
+                        SearchBox.Text = ""; // 検索バーを空にする
+                        await LoadFeedsToTreeViewAsync();
+                    }
+                }
+            }
+        }
+
+        // フィード削除処理
+        private async void DeleteFeed_Click(object sender, RoutedEventArgs e)
+        {
+            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode)
+            {
+                // Tagが空（null）＝フォルダ
+                if (selectedNode.Tag == null)
+                {
+                    MessageBox.Show("フォルダの削除・編集機能は、中身への影響が大きいため今回は対象外だよ。");
+                    return;
+                }
+
+                long feedId = (long)selectedNode.Tag;
+                var result = MessageBox.Show("このサイトと記事をすべて削除しますか？", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                
+                if (result == MessageBoxResult.Yes)
+                {
+                    await _repository.DeleteFeedAsync(feedId);
+                    currentArticles.Clear(); // 中央のリストをクリアする
+                    PreviewBrowser.Navigate("about:blank"); // 右ペインをクリア
+                    await LoadFeedsToTreeViewAsync();
+                }
+            }
+        }
+
+        // フィードの名前（タイトル）を変更する処理
+        private async void RenameFeed_Click(object sender, RoutedEventArgs e)
+        {
+            // ツリービューで選択されている項目を取得
+            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode)
+            {
+                // Tagが空（null）＝フォルダ
+                if (selectedNode.Tag == null)
+                {
+                    MessageBox.Show("フォルダの削除・編集機能は、中身への影響が大きいため今回は対象外だよ。");
+                    return;
+                }
+                // 現在の表示名から (未読数) を除いた純粋なタイトルを取得
+                string currentTitle = selectedNode.Header.ToString()!.Split(" (")[0];
+
+                // 入力ダイアログを表示
+                string newTitle = Interaction.InputBox("新しい名前を入力してください", "名前の変更", currentTitle);
+
+                long feedId = (long)selectedNode.Tag;
+
+                if (!string.IsNullOrWhiteSpace(newTitle) && newTitle != currentTitle)
+                {
+                    // DBの情報を更新（フォルダやURLはそのまま）
+                    var feeds = await _repository.GetAllFeedsAsync();
+                    var target = feeds.FirstOrDefault(f => f.Id == feedId);
+
+                    if (target != null)
+                    {
+                        await _repository.UpdateFeedAsync(feedId, target.FolderPath, newTitle, target.Url);
+                        await LoadFeedsToTreeViewAsync(); // ツリーを再描画
+                    }
+                }
+            }
+        }
+
+        // フィードの所属フォルダを変更する処理
+        private async void MoveFolder_Click(object sender, RoutedEventArgs e)
+        {
+            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode && selectedNode.Tag is long feedId)
+            {
+                var feeds = await _repository.GetAllFeedsAsync();
+                var target = feeds.FirstOrDefault(f => f.Id == feedId);
+
+                if (target != null)
+                {
+                    // 現在のフォルダパスを入力初期値にする
+                    string newFolder = Interaction.InputBox("移動先のフォルダパスを入力してください\n例: /News/IT", "フォルダの変更", target.FolderPath);
+
+                    if (!string.IsNullOrWhiteSpace(newFolder))
+                    {
+                        // 先頭が / で始まっていない場合は補完する
+                        if (!newFolder.StartsWith("/")) newFolder = "/" + newFolder;
+
+                        await _repository.UpdateFeedAsync(feedId, newFolder, target.Title, target.Url);
+                        await LoadFeedsToTreeViewAsync(); // ツリーを再描画
+                    }
                 }
             }
         }
@@ -224,109 +351,112 @@ namespace FeedGem
             });
         }
 
-        // 入力されたURLからRSSフィードを探索し、追加処理を行う
-        private async Task DiscoverAndAddFeedAsync(string targetUrl)
+        // URLからフィード（RSS/Atom）の候補を探すメソッド
+        private async Task<List<FeedCandidate>> DiscoverFeedsAsync(string targetUrl)
         {
+            var candidates = new List<FeedCandidate>();
+
+            // 1. まず入力されたURLそのものをフィードとして試す（SourceForge直入力などのケース）
             try
             {
-                // URLから直接フィードを読み込む（Atom/RSS両対応）
-                using var response = await httpClient.GetAsync(targetUrl);
-                if (response.IsSuccessStatusCode)
+                using var reader = XmlReader.Create(targetUrl);
+                var feed = SyndicationFeed.Load(reader);
+                candidates.Add(new FeedCandidate { Title = feed.Title.Text, Url = targetUrl });
+                return candidates;
+            }
+            catch { /* 次のHTML解析へ */ }
+
+            // 2. HTML内からフィードURLを探す
+            try
+            {
+                var web = new HtmlWeb();
+                var doc = await web.LoadFromWebAsync(targetUrl);
+
+                // RSS/Atomを示唆するlinkタグを広めに探す
+                var nodes = doc.DocumentNode.SelectNodes("//link[@rel='alternate' or @type='application/rss+xml' or @type='application/atom+xml']");
+
+                if (nodes != null)
                 {
-                    using var stream = await response.Content.ReadAsStreamAsync();
-                    using var xmlReader = XmlReader.Create(stream);
-                    var feed = SyndicationFeed.Load(xmlReader);
-
-                    // 読み込めたら即座に追加
-                    await AddFeedToDatabaseAsync("/", feed.Title?.Text ?? "Untitled Feed", targetUrl);
-                    await LoadFeedsToTreeViewAsync();
-                    return; // 成功したらここで終了
-                }
-            }
-            catch (XmlException)
-            {
-                // XmlException発生時、対象URLはHTMLページであると判定して後続の探索処理へ移行
-            }
-            catch (Exception)
-            {
-                SearchBox.Text = "エラー: アクセスできません";
-                return;
-            }
-
-            // HTMLページからフィードリンクを抽出する
-            var htmlWeb = new HtmlWeb();
-            var doc = await htmlWeb.LoadFromWebAsync(targetUrl);
-            var nodes = doc.DocumentNode.SelectNodes("//link[@rel='alternate' and (contains(@type, 'rss') or contains(@type, 'atom'))]");
-
-            // 候補ノードの存在判定
-            if (nodes == null || nodes.Count == 0)
-            {
-                SearchBox.Text = "フィードが見つかりません";
-                return;
-            }
-
-            // 候補が7個以上の場合は仕様に基づき処理を中断
-            if (nodes.Count >= 7)
-            {
-                SearchBox.Text = $"候補多数({nodes.Count}件)のため中断";
-                return;
-            }
-
-            // 候補が1〜6個の場合、ウィンドウを表示して選択させる
-            var candidates = new List<FeedCandidate>();
-            foreach (var node in nodes)
-            {
-                string feedUrl = node.GetAttributeValue("href", "");
-                string feedTitle = node.GetAttributeValue("title", "Found Feed");
-
-                // 相対パスの補完
-                if (!feedUrl.StartsWith("http") && Uri.TryCreate(new Uri(targetUrl), feedUrl, out Uri? absoluteUri))
-                {
-                    feedUrl = absoluteUri.ToString();
-                }
-
-                candidates.Add(new FeedCandidate { Title = feedTitle, Url = feedUrl });
-            }
-
-            // UIスレッドで選択ウィンドウを表示
-            await Dispatcher.Invoke(async () =>
-            {
-                var selectionWindow = new FeedSelectionWindow(candidates) { Owner = this };
-
-                // ユーザーが選択して「OK」を押したか確認
-                if (selectionWindow.ShowDialog() == true)
-                {
-                    foreach (var selected in selectionWindow.SelectedFeeds)
+                    foreach (var node in nodes)
                     {
-                        // データベースへ登録
-                        await AddFeedToDatabaseAsync("/", selected.Title, selected.Url);
+                        string href = node.GetAttributeValue("href", "");
+                        string type = node.GetAttributeValue("type", "").ToLower();
+                        string title = node.GetAttributeValue("title", "");
+
+                        if (string.IsNullOrEmpty(href)) continue;
+
+                        // 記事そのもののリンクや、コメント用フィードなどを除外するフィルタ
+                        if (href.Contains("comment") || href.Contains("trackback")) continue;
+
+                        // 相対パス（/feed等）を絶対パス（https://.../feed）に変換
+                        Uri baseUri = new Uri(targetUrl);
+                        Uri fullUri = new Uri(baseUri, href);
+                        string absoluteUrl = fullUri.AbsoluteUri;
+
+                        // タイトルが空ならサイトの<title>を借りる
+                        if (string.IsNullOrWhiteSpace(title) || title.ToUpper() == "RSS")
+                        {
+                            title = doc.DocumentNode.SelectSingleNode("//title")?.InnerText?.Trim() ?? "不明なフィード";
+                        }
+
+                        // 重複チェックをして追加
+                        if (!candidates.Any(c => c.Url == absoluteUrl))
+                        {
+                            candidates.Add(new FeedCandidate { Title = title, Url = absoluteUrl });
+                        }
                     }
-                    // 登録が終わったら、左側のツリービューを最新の状態にする
-                    await LoadFeedsToTreeViewAsync();
                 }
-            });
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"探索エラー: {ex.Message}");
+            }
+
+            return candidates;
         }
         #endregion
 
         #region --- DBアクセス ---
 
-        // データベースから「購読一覧」を取得して左ペインに表示する
+        // フォルダ階層を考慮してフィード一覧を表示する
         private async Task LoadFeedsToTreeViewAsync()
         {
             FeedTreeView.Items.Clear();
-            var rootNode = new TreeViewItem { Header = "すべての購読", IsExpanded = true };
-            FeedTreeView.Items.Add(rootNode);
-
             var feeds = await _repository.GetAllFeedsAsync();
+
+            // フォルダパスをキーにして、作成済みのツリーノードを管理する辞書
+            var folderNodes = new Dictionary<string, TreeViewItem>();
+
             foreach (var feed in feeds)
             {
-                var feedNode = new TreeViewItem { Header = feed.Title, Tag = feed.Id };
-                feedNode.Selected += async (s, e) =>
+                // フォルダパス（例: /News/Tech）を「/」で区切って階層を作る
+                var pathParts = feed.FolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                ItemsControl parent = FeedTreeView;
+                string currentKey = "";
+
+                foreach (var part in pathParts)
                 {
+                    currentKey += "/" + part;
+                    if (!folderNodes.ContainsKey(currentKey))
+                    {
+                        var newNode = new TreeViewItem { Header = part, IsExpanded = true };
+                        parent.Items.Add(newNode);
+                        folderNodes[currentKey] = newNode;
+                    }
+                    parent = folderNodes[currentKey];
+                }
+
+                // 実際のフィードノードを作成
+                int unreadCount = await _repository.GetUnreadCountAsync(feed.Id);
+                string displayText = unreadCount > 0 ? $"{feed.Title} ({unreadCount})" : feed.Title;
+
+                var feedNode = new TreeViewItem { Header = displayText, Tag = feed.Id }; // TagにIDを隠しておく
+                feedNode.Selected += async (s, e) => {
                     e.Handled = true;
                     await LoadEntriesToListViewAsync(feed.Id);
                 };
-                rootNode.Items.Add(feedNode);
+
+                parent.Items.Add(feedNode);
             }
         }
 
@@ -360,53 +490,43 @@ namespace FeedGem
 
             await command.ExecuteNonQueryAsync();
         }
- 
+
         // 指定されたURLから記事を取得し、データベースに保存する
-        private async Task FetchAndSaveEntriesAsync(long feedId, string url, SqliteConnection connection)
+        private async Task FetchAndSaveEntriesAsync(string url)
         {
+            // DBから登録情報の詳細（IDなど）を逆引きする
+            var feeds = await _repository.GetAllFeedsAsync();
+            var target = feeds.FirstOrDefault(f => f.Url == url);
+            if (target == null) return;
+
             try
             {
-                // URLからRSSフィードデータを取得
-                using var response = await httpClient.GetAsync(url);
-                using var stream = await response.Content.ReadAsStreamAsync();
-                using var xmlReader = XmlReader.Create(stream);
-                var feed = SyndicationFeed.Load(xmlReader);
+                using var reader = XmlReader.Create(url);
+                var rssData = SyndicationFeed.Load(reader);
 
-                // 取得した各記事データをデータベースへ挿入
-                foreach (var item in feed.Items)
+                foreach (var item in rssData.Items)
                 {
-                    // 1. 記事のURLを取得
-                    string entryUrl = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-
-                    // 2. 投稿日時の補正（0001年問題を回避）
-                    var pubDate = (item.PublishDate.Year < 1900) ? DateTimeOffset.Now : item.PublishDate;
-
-                    // 3. 本文（SummaryかContent）の取得
-                    string contentText = item.Summary?.Text ?? "";
-                    if (string.IsNullOrEmpty(contentText) && item.Content is TextSyndicationContent textContent)
+                    string title = item.Title?.Text ?? "無題";
+                    string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
+                    string summary = item.Summary?.Text ?? "";
+                    if (string.IsNullOrEmpty(summary) && item.Content is TextSyndicationContent textContent)
                     {
-                        contentText = textContent.Text;
+                        summary = textContent.Text;
                     }
+                    summary ??= ""; // それでもnullなら空文字に
 
-                    // 4. SQLクエリの作成（ここで insertQuery を定義するよ）
-                    string insertQuery = @"INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
-                                         VALUES (@feedId, @title, @url, @summary, @pubDate)";
+                    // 安全な日付取得
+                    DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
+                                           item.LastUpdatedTime != default ? item.LastUpdatedTime :
+                                           DateTimeOffset.Now;
 
-                    using var insertCmd = new SqliteCommand(insertQuery, connection);
-
-                    // 5. パラメータのセット
-                    insertCmd.Parameters.AddWithValue("@feedId", feedId);
-                    insertCmd.Parameters.AddWithValue("@title", item.Title?.Text ?? "No Title");
-                    insertCmd.Parameters.AddWithValue("@url", entryUrl);
-                    insertCmd.Parameters.AddWithValue("@summary", contentText);
-                    insertCmd.Parameters.AddWithValue("@pubDate", pubDate.ToString("yyyy/MM/dd HH:mm"));
-
-                    await insertCmd.ExecuteNonQueryAsync();
+                    // リポジトリに保存を依頼
+                    await _repository.SaveEntryAsync(target.Id, title, link, summary, pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm"));
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // 取得失敗時はログ記録等の処理を想定（今回はスキップ）
+                Debug.WriteLine($"記事取得失敗: {ex.Message}");
             }
         }
         #endregion

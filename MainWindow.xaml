@@ -17,7 +17,16 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5"/>
+            <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5">
+                <TreeView.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="フォルダを変更" Click="MoveFolder_Click"/>
+                        <MenuItem Header="名前を変更" Click="RenameFeed_Click"/>
+                        <Separator/>
+                        <MenuItem Header="このサイトを削除" Click="DeleteFeed_Click" Foreground="Red"/>
+                    </ContextMenu>
+                </TreeView.ContextMenu>
+            </TreeView>
 
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="LightGray"/>
 

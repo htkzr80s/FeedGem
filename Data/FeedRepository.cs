@@ -143,6 +143,68 @@ namespace FeedGem.Data
 
             await command.ExecuteNonQueryAsync();
         }
+
+        // 指定したフィードの未読記事数を取得する
+        public async Task<int> GetUnreadCountAsync(long feedId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // is_read が 0（未読）のレコード数をカウントするクエリ
+            string query = "SELECT COUNT(*) FROM entries WHERE feed_id = @feedId AND is_read = 0";
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@feedId", feedId);
+
+            // ExecuteScalarAsyncで結果の最初の1行1列（カウント数）を取得
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt32(result); // int型に変換して返す
+        }
+
+        // フィード情報を更新する（タイトルやフォルダ、URLの変更用）
+        public async Task UpdateFeedAsync(long id, string folderPath, string title, string url)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string updateQuery = "UPDATE feeds SET folder_path = @folder, title = @title, url = @url WHERE id = @id";
+            using var command = new SqliteCommand(updateQuery, connection);
+            command.Parameters.AddWithValue("@folder", folderPath);
+            command.Parameters.AddWithValue("@title", title);
+            command.Parameters.AddWithValue("@url", url);
+            command.Parameters.AddWithValue("@id", id);
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        // フィードを削除する（関連する記事も一緒に消す）
+        public async Task DeleteFeedAsync(long id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // 外部キー制約が有効なら記事も消えるが、念のため明示的に両方消す
+            string deleteEntries = "DELETE FROM entries WHERE feed_id = @id";
+            string deleteFeed = "DELETE FROM feeds WHERE id = @id";
+
+            using var transaction = connection.BeginTransaction();
+            try
+            {
+                using var cmd1 = new SqliteCommand(deleteEntries, connection, transaction);
+                cmd1.Parameters.AddWithValue("@id", id);
+                await cmd1.ExecuteNonQueryAsync();
+
+                using var cmd2 = new SqliteCommand(deleteFeed, connection, transaction);
+                cmd2.Parameters.AddWithValue("@id", id);
+                await cmd2.ExecuteNonQueryAsync();
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
     }
 
     // 内部管理用のシンプルなクラス
