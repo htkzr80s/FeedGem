@@ -202,6 +202,26 @@ namespace FeedGem.Data
                 throw;
             }
         }
+
+        // 各フィードごとに最新20件を除いた古い記事を一括削除する
+        public async Task DeleteOldEntriesAsync()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // ROW_NUMBERを使って、各feed_idごとに新しい順に番号を振り、21番目以降を削除対象にする
+            string deleteQuery = @"
+                DELETE FROM entries 
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY published_date DESC, id DESC) as row_num
+                        FROM entries
+                    ) WHERE row_num > 20
+                )";
+
+            using var command = new SqliteCommand(deleteQuery, connection);
+            await command.ExecuteNonQueryAsync();
+        }
     }
 
     // 内部管理用のシンプルなクラス

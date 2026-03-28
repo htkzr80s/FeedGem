@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml;
@@ -113,57 +114,115 @@ namespace FeedGem
             }
         }
 
-        // テキストボックスでキーが押された時の処理
-        private async void SearchBox_KeyDown(object sender, KeyEventArgs e)
+        // URL入力バーの右にあるエンターボタン（⏎）をクリックした時の処理
+        private void UrlEnterButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Enterキーが押された時と同じ処理を呼び出す
+            PerformUrlSubscribe();
+        }
+
+        // テキストボックス（SearchBox）でキーが押された時の処理
+        private void SearchBox_KeyDown(object sender, KeyEventArgs e)
         {
             // Enterキーが押されたか確認
             if (e.Key == Key.Enter)
             {
-                string url = SearchBox.Text.Trim();
-                if (string.IsNullOrEmpty(url)) return;
+                PerformUrlSubscribe(); // 購読処理を実行
+            }
+        }
 
-                // フィードの探索（既存のロジック）
-                var candidates = await DiscoverFeedsAsync(url);
+        // 実際の購読処理をまとめたメソッド
+        private async void PerformUrlSubscribe()
+        {
+            string url = SearchBox.Text.Trim();
+            if (string.IsNullOrEmpty(url) || url == "URLを入力してEnter...") return;
 
-                bool added = false; // 追加が行われたかを判定するフラグ
+            // フィードの探索
+            var candidates = await DiscoverFeedsAsync(url);
 
-                if (candidates.Count == 1)
+            bool added = false; // 追加が行われたかを判定するフラグ
+
+            if (candidates.Count == 1)
+            {
+                // 1つだけ見つかった場合はそのまま登録
+                var selected = candidates[0];
+                await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+
+                // 登録直後に記事をダウンロードする
+                await FetchAndSaveEntriesAsync(selected.Url);
+
+                added = true;
+            }
+            else if (candidates.Count > 1)
+            {
+                // 複数見つかった場合は選択ウィンドウを表示
+                var selectionWindow = new FeedSelectionWindow(candidates) { Owner = this };
+
+                if (selectionWindow.ShowDialog() == true)
                 {
-                    // 1つだけ見つかった場合はそのまま登録
-                    var selected = candidates[0];
-                    await _repository.AddFeedAsync("/", selected.Title, selected.Url);
-
-                    // 登録直後に記事をダウンロードする
-                    await FetchAndSaveEntriesAsync(selected.Url);
-
-                    // ツリービューを更新
-                    await LoadFeedsToTreeViewAsync();
+                    foreach (var selected in selectionWindow.SelectedFeeds)
+                    {
+                        await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+                        await FetchAndSaveEntriesAsync(selected.Url);
+                    }
                     added = true;
                 }
-                else if (candidates.Count > 1)
-                {
-                    // 複数見つかった場合は選択ウィンドウを表示
-                    var selectionWindow = new FeedSelectionWindow(candidates) { Owner = this };
-
-                    if (selectionWindow.ShowDialog() == true)
-                    {
-                        foreach (var selected in selectionWindow.SelectedFeeds)
-                        {
-                            await _repository.AddFeedAsync("/", selected.Title, selected.Url);
-                            // 選択されたものそれぞれをダウンロード
-                            await FetchAndSaveEntriesAsync(selected.Url);
-                        }
-                        await LoadFeedsToTreeViewAsync();
-                        added = true;
-                    }
-
-                    if (added)
-                    {
-                        SearchBox.Text = ""; // 検索バーを空にする
-                        await LoadFeedsToTreeViewAsync();
-                    }
-                }
             }
+            // 探索に失敗した場合などのケア
+            else
+            {
+                MessageBox.Show("フィードが見つかりません。URLが正しいか確認してください。", "お知らせ");
+            }
+
+            if (added)
+            {
+                // 修正箇所2：購読完了したら入力バーを空にする
+                SearchBox.Text = "";
+                // ツリービューを更新
+                await LoadFeedsToTreeViewAsync();
+            }
+        }
+
+        // 記事検索ボックスにフォーカスが当たった時の処理
+        private void FilterBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            if (FilterBox.Text == "記事を検索...")
+            {
+                FilterBox.Text = "";
+                FilterBox.Foreground = Brushes.Black;
+            }
+        }
+
+        // 記事検索ボックスの文字が変更された時の処理（絞り込み）
+        private void FilterBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // ListViewのデフォルトビューを取得してフィルタリング
+            var view = CollectionViewSource.GetDefaultView(ArticleListView.ItemsSource);
+            if (view == null) return;
+
+            string keyword = FilterBox.Text.Trim();
+            if (string.IsNullOrEmpty(keyword) || keyword == "記事を検索...")
+            {
+                view.Filter = null; // 検索文字が空ならフィルタ解除
+            }
+            else
+            {
+                view.Filter = item =>
+                {
+                    if (item is ArticleItem article)
+                    {
+                        // タイトルにキーワードが含まれているか（大文字小文字を区別しない）
+                        return article.Title.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+                    }
+                    return false;
+                };
+            }
+        }
+
+        // 記事検索バーの右にあるクリアボタン（✕）をクリックした時の処理
+        private void FilterClearButton_Click(object sender, RoutedEventArgs e)
+        {
+            FilterBox.Text = ""; // 検索バーを空にする（これで自動的にフィルタも解除される）
         }
 
         // フィード削除処理
@@ -284,13 +343,18 @@ namespace FeedGem
                     // 記事を一つずつチェックして保存
                     foreach (var item in rssData.Items)
                     {
-                        string title = item.Title.Text;
+                        // 修正箇所1：タイトルが空の場合の対策
+                        string title = item.Title?.Text ?? "無題";
                         string url = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
                         string summary = item.Summary?.Text ?? "";
-                        string pubDate = item.PublishDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
 
-                        // リポジトリ経由でデータベースに保存（重複はリポジトリ側で無視される）
-                        await _repository.SaveEntryAsync(feed.Id, title, url, summary, pubDate);
+                        // 修正箇所2：日付データが欠落している際のエラー対策
+                        DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
+                                               item.LastUpdatedTime != default ? item.LastUpdatedTime :
+                                               DateTimeOffset.Now;
+
+                        // リポジトリ経由でデータベースに保存
+                        await _repository.SaveEntryAsync(feed.Id, title, url, summary, pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm"));
                     }
                 }
                 catch (Exception ex)
@@ -300,11 +364,20 @@ namespace FeedGem
                 }
             }
 
+            // 古い記事の自動削除を実行
+            await _repository.DeleteOldEntriesAsync();
+
             // 画面上の最終更新時刻を更新
             await Dispatcher.InvokeAsync(() =>
             {
                 LastUpdateTextBlock.Text = $"最終更新: {DateTime.Now:HH:mm:ss}";
             });
+
+            // 念のため、現在表示中の記事リストもリフレッシュする
+            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode && selectedNode.Tag is long feedId)
+            {
+                await LoadEntriesToListViewAsync(feedId);
+            }
         }
 
         // URLからフィード（RSS/Atom）の候補を探すメソッド
@@ -492,6 +565,8 @@ namespace FeedGem
                     // リポジトリに保存を依頼
                     await _repository.SaveEntryAsync(target.Id, title, link, summary, pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm"));
                 }
+                // 記事の取得が終わったら、古い記事を掃除する
+                await _repository.DeleteOldEntriesAsync();
             }
             catch (Exception ex)
             {
