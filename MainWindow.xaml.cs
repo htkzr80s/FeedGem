@@ -1,7 +1,6 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
 using HtmlAgilityPack;
-using Microsoft.Data.Sqlite;
 using Microsoft.VisualBasic;
 using System;
 using System.Collections.Generic;
@@ -14,7 +13,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml;
@@ -25,15 +23,12 @@ namespace FeedGem
     {
         #region --- フィールド定義 ---
 
-        // データベース接続用の文字列
-        private readonly string dbConnectionString = "Data Source=feedgem.db";
-
         // HTTP通信用のクライアントインスタンスを生成
         // アプリケーション全体で再利用してリソースの枯渇を防ぐ
-        private static readonly HttpClient httpClient = new HttpClient();
+        private static readonly HttpClient httpClient = new();
 
         // 記事リスト（中央ペイン）に表示するためのデータ管理用
-        private ObservableCollection<ArticleItem> currentArticles = new ObservableCollection<ArticleItem>();
+        private ObservableCollection<ArticleItem> currentArticles = [];
 
         // データベース操作を専門に行うインスタンス
         private readonly FeedRepository _repository;
@@ -66,68 +61,29 @@ namespace FeedGem
                 this.Icon = icon;
             }
         }
-
-        // SQLiteデータベースと必要なテーブルを初期化する
-        private void InitializeDatabase()
-        {
-            using var connection = new SqliteConnection(dbConnectionString);
-            connection.Open();
-
-            // feedsテーブルとentriesテーブルを作成
-            string createTableQuery = @"
-                CREATE TABLE IF NOT EXISTS feeds (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    folder_path TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    url TEXT UNIQUE NOT NULL
-                );
-                CREATE TABLE IF NOT EXISTS entries (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    feed_id INTEGER,
-                    title TEXT NOT NULL,
-                    url TEXT UNIQUE NOT NULL,
-                    summary TEXT,
-                    published_date TEXT,
-                    is_read INTEGER DEFAULT 0,
-                    FOREIGN KEY(feed_id) REFERENCES feeds(id)
-                );";
-
-            using var command = new SqliteCommand(createTableQuery, connection);
-            command.ExecuteNonQuery();
-        }
         #endregion
 
         #region --- UIイベントハンドラ ---
 
-        // リスト内の記事選択が変更された際のイベントハンドラ
+        // 記事リストの選択が変更された際の処理
         private async void ArticleListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            // 選択項目がArticleItem型であるか判定
             if (ArticleListView.SelectedItem is ArticleItem selectedArticle)
             {
-                // 未読の場合のみ既読処理を実行
+                // 既読処理
                 if (!selectedArticle.IsRead)
                 {
-                    selectedArticle.IsRead = true; // モデルのプロパティを更新（UIの色が変わる）
-                    await _repository.MarkAsReadAsync(selectedArticle.Url); // データベースを更新
+                    selectedArticle.IsRead = true;
+                    await _repository.MarkAsReadAsync(selectedArticle.Url);
                 }
 
-                // Summaryが空の場合の対策
-                string displayContent = string.IsNullOrWhiteSpace(selectedArticle.Summary)
-                    ? "（詳細情報の取得に失敗したか、要約のない記事です。下のボタンから直接サイトを確認してください。）"
-                    : selectedArticle.Summary;
+                // WebView2の準備ができているか確認
+                await PreviewBrowser.EnsureCoreWebView2Async(null);
 
-                // プレビュー用のHTML文字列を生成
-                string html = $@"
-                    <html>
-                    <head><meta charset='utf-8'></head>
-                    <body style='font-family: sans-serif; line-height: 1.6; padding: 15px;'>
-                        <h2 style='border-bottom: 1px solid #ccc; padding-bottom: 5px;'>{selectedArticle.Title}</h2>
-                        <div style='font-size: 14px;'>{selectedArticle.Summary}</div>
-                    </body>
-                    </html>";
+                // ヘルパークラスを使ってHTMLを生成する
+                string html = FeedGem.Helpers.FeedHelper.GeneratePreviewHtml(selectedArticle.Title, selectedArticle.Summary);
 
-                // WebBrowserコントロールへHTMLを流し込む
+                // プレビュー表示
                 PreviewBrowser.NavigateToString(html);
             }
         }
@@ -147,7 +103,7 @@ namespace FeedGem
             }
         }
 
-       // 入力欄にマウスやタブで移動した時の処理
+        // 入力欄にマウスやタブで移動した時の処理
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
         {
             if (SearchBox.Text == "URLを入力してEnter...")
@@ -229,7 +185,7 @@ namespace FeedGem
                 {
                     await _repository.DeleteFeedAsync(feedId);
                     currentArticles.Clear(); // 中央のリストをクリアする
-                    PreviewBrowser.Navigate("about:blank"); // 右ペインをクリア
+                    PreviewBrowser.Source = new Uri("about:blank"); // 右ペインをクリア
                     await LoadFeedsToTreeViewAsync();
                 }
             }
@@ -407,11 +363,43 @@ namespace FeedGem
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"探索エラー: {ex.Message}");
-            }
+            catch { /* 次のHTML解析へ */ }
 
+            // 3. よくあるフィードURLを推測して試す
+            var commonPaths = new[]
+            {
+                "/feed",
+                "/rss",
+                "/rss.xml",
+                "/atom.xml",
+                "/index.xml",
+                "/feeds/posts/default" // FC2やBlogger系
+            };
+
+            foreach (var path in commonPaths)
+            {
+                try
+                {
+                    Uri baseUri = new Uri(targetUrl);
+                    Uri testUri = new Uri(baseUri, path);
+
+                    using var reader = XmlReader.Create(testUri.AbsoluteUri);
+                    var feed = SyndicationFeed.Load(reader);
+
+                    if (feed != null && !candidates.Any(c => c.Url == testUri.AbsoluteUri))
+                    {
+                        candidates.Add(new FeedCandidate
+                        {
+                            Title = feed.Title?.Text ?? "フィード",
+                            Url = testUri.AbsoluteUri
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"探索エラー: {ex.Message}");
+                }
+            }
             return candidates;
         }
         #endregion
@@ -470,25 +458,6 @@ namespace FeedGem
                 currentArticles.Add(article);
             }
             ArticleListView.ItemsSource = currentArticles;
-        }
-
-        // フィード情報をデータベースに登録する
-        private async Task AddFeedToDatabaseAsync(string folderPath, string title, string url)
-        {
-            using var connection = new SqliteConnection(dbConnectionString);
-            await connection.OpenAsync();
-
-            // フィードデータを挿入（URL重複時は無視）
-            string insertQuery = @"
-                INSERT OR IGNORE INTO feeds (folder_path, title, url)
-                VALUES (@folderPath, @title, @url)";
-
-            using var command = new SqliteCommand(insertQuery, connection);
-            command.Parameters.AddWithValue("@folderPath", folderPath);
-            command.Parameters.AddWithValue("@title", title);
-            command.Parameters.AddWithValue("@url", url);
-
-            await command.ExecuteNonQueryAsync();
         }
 
         // 指定されたURLから記事を取得し、データベースに保存する

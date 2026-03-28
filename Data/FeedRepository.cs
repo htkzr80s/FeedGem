@@ -11,10 +11,7 @@ namespace FeedGem.Data
         // データベース接続文字列
         private readonly string _connectionString;
 
-        public FeedRepository(string dbPath)
-        {
-            _connectionString = $"Data Source={dbPath}";
-        }
+        public FeedRepository(string dbPath) => _connectionString = $"Data Source={dbPath}";
 
         // テーブルの初期化を行う
         public void Initialize()
