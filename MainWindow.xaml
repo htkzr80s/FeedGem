@@ -18,7 +18,21 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5" PreviewMouseRightButtonDown="FeedTreeView_PreviewMouseRightButtonDown">
+            <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5" 
+                      PreviewMouseRightButtonDown="FeedTreeView_PreviewMouseRightButtonDown"
+                      AllowDrop="True"
+                      PreviewMouseLeftButtonDown="FeedTreeView_PreviewMouseLeftButtonDown"
+                      PreviewMouseMove="FeedTreeView_PreviewMouseMove"
+                      DragOver="FeedTreeView_DragOver"
+                      Drop="FeedTreeView_Drop">
+
+                <TreeView.Resources>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="FontSize" Value="14"/>
+                        <Setter Property="Padding" Value="2,4"/>
+                    </Style>
+                </TreeView.Resources>
+
                 <TreeView.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="新しいフォルダ" Click="CreateFolder_Click"/>

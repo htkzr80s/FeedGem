@@ -459,6 +459,159 @@ namespace FeedGem
         }
         #endregion
 
+        #region --- UI生成ヘルパー ---
+
+        // フォルダ・フィード用のヘッダーUI（アイコン付き）を生成する
+        private static StackPanel CreateTreeItemHeader(string text, bool isFolder, string? url = null)
+        {
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
+
+            if (isFolder)
+            {
+                var folderIcon = new TextBlock
+                {
+                    Text = "📁", // フォルダアイコン
+                    FontSize = 16,
+                    Margin = new Thickness(0, 0, 5, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                panel.Children.Add(folderIcon);
+            }
+            else
+            {
+                var image = new System.Windows.Controls.Image
+                {
+                    Width = 16,
+                    Height = 16,
+                    Margin = new Thickness(0, 0, 5, 0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                try
+                {
+                    // GoogleのFavicon APIを利用してアイコンを取得
+                    if (!string.IsNullOrEmpty(url))
+                    {
+                        var uri = new Uri(url);
+                        string faviconUrl = $"https://www.google.com/s2/favicons?domain={uri.Host}&sz=16";
+                        image.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(faviconUrl));
+                    }
+                }
+                catch { /* URL解析失敗時などはアイコンなしで続行 */ }
+
+                panel.Children.Add(image);
+            }
+
+            var textBlock = new TextBlock
+            {
+                Text = text,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            panel.Children.Add(textBlock);
+
+            return panel;
+        }
+        #endregion
+
+        #region --- ドラッグ＆ドロップ関連 ---
+
+        private Point _startPoint;
+        private TreeViewItem? _dragSourceItem;
+
+        // ドラッグ開始位置の記録
+        private void FeedTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            _startPoint = e.GetPosition(null);
+        }
+
+        // マウス移動時にドラッグを開始する
+        private void FeedTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
+        {
+            if (e.LeftButton == MouseButtonState.Pressed)
+            {
+                Point mousePos = e.GetPosition(null);
+                Vector diff = _startPoint - mousePos;
+
+                // 一定距離マウスが動いたらドラッグと判定
+                if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                    Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+                {
+                    var treeViewItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
+                    if (treeViewItem != null)
+                    {
+                        _dragSourceItem = treeViewItem;
+                        DragDrop.DoDragDrop(treeViewItem, treeViewItem, DragDropEffects.Move);
+                    }
+                }
+            }
+        }
+
+        // ドラッグ中のマウスカーソル状態
+        private void FeedTreeView_DragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = DragDropEffects.Move;
+            e.Handled = true;
+        }
+
+        // ドロップされた時の処理
+        private async void FeedTreeView_Drop(object sender, DragEventArgs e)
+        {
+            if (_dragSourceItem == null) return;
+
+            var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
+            if (targetItem == _dragSourceItem) return;
+
+            // 今回はフィードの移動のみサポート（フォルダ自体の移動は中身のケアが必要なので弾く）
+            if (_dragSourceItem.Tag is not long feedId)
+            {
+                MessageBox.Show("フォルダの移動は今回対象外だよ。");
+                return;
+            }
+
+            string newFolderPath = "/"; // デフォルトはルート
+            if (targetItem != null)
+            {
+                if (targetItem.Tag is string folderPath)
+                {
+                    // ターゲットがフォルダノード
+                    newFolderPath = folderPath;
+                }
+                else if (targetItem.Tag is long)
+                {
+                    // ターゲットが別のフィードノードなら、親のフォルダを取得
+                    var parentItem = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(targetItem));
+                    if (parentItem != null && parentItem.Tag is string pPath)
+                    {
+                        newFolderPath = pPath;
+                    }
+                }
+            }
+
+            // DB上のフォルダパスを更新
+            var feeds = await _repository.GetAllFeedsAsync();
+            var target = feeds.FirstOrDefault(f => f.Id == feedId);
+            if (target != null && target.FolderPath != newFolderPath)
+            {
+                await _repository.UpdateFeedAsync(feedId, newFolderPath, target.Title, target.Url);
+                await LoadFeedsToTreeViewAsync(); // ツリーを再描画
+            }
+        }
+
+        // 指定した型の親要素をビジュアルツリーから探し出す
+        private static T? FindAncestor<T>(DependencyObject current) where T : DependencyObject
+        {
+            do
+            {
+                if (current is T ancestor) return ancestor;
+                current = VisualTreeHelper.GetParent(current);
+            } while (current != null);
+            return null;
+        }
+        #endregion
+
         #region --- データ取得・巡回系 ---
 
         // バックグラウンドでの定期巡回タスクを開始する
@@ -540,12 +693,10 @@ namespace FeedGem
             FeedTreeView.Items.Clear();
             var feeds = await _repository.GetAllFeedsAsync();
 
-            // フォルダパスをキーにして、作成済みのツリーノードを管理する辞書
             var folderNodes = new Dictionary<string, TreeViewItem>();
 
             foreach (var feed in feeds)
             {
-                // フォルダパス（例: /News/Tech）を「/」で区切って階層を作る
                 var pathParts = feed.FolderPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
                 ItemsControl parent = FeedTreeView;
                 string currentKey = "";
@@ -555,7 +706,13 @@ namespace FeedGem
                     currentKey += "/" + part;
                     if (!folderNodes.TryGetValue(currentKey, out TreeViewItem? value))
                     {
-                        var newNode = new TreeViewItem { Header = part, IsExpanded = true };
+                        // 変更：リッチなUIを設定し、Tagにフォルダのパス文字列を保持させる
+                        var newNode = new TreeViewItem
+                        {
+                            Header = CreateTreeItemHeader(part, true),
+                            IsExpanded = true,
+                            Tag = currentKey
+                        };
                         parent.Items.Add(newNode);
                         value = newNode;
                         folderNodes[currentKey] = value;
@@ -563,11 +720,15 @@ namespace FeedGem
                     parent = value;
                 }
 
-                // 実際のフィードノードを作成
                 int unreadCount = await _repository.GetUnreadCountAsync(feed.Id);
                 string displayText = unreadCount > 0 ? $"{feed.Title} ({unreadCount})" : feed.Title;
 
-                var feedNode = new TreeViewItem { Header = displayText, Tag = feed.Id }; // TagにIDを隠しておく
+                // 変更：Favicon対応のUIを設定
+                var feedNode = new TreeViewItem
+                {
+                    Header = CreateTreeItemHeader(displayText, false, feed.Url),
+                    Tag = feed.Id // 記事の場合はlong型のIDを保持
+                };
                 feedNode.Selected += async (s, e) => {
                     e.Handled = true;
                     await LoadEntriesToListViewAsync(feed.Id);
