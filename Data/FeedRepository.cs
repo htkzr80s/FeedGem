@@ -6,12 +6,10 @@ using FeedGem.Models;
 
 namespace FeedGem.Data
 {
-    public class FeedRepository
+    public class FeedRepository(string dbPath)
     {
         // データベース接続文字列
-        private readonly string _connectionString;
-
-        public FeedRepository(string dbPath) => _connectionString = $"Data Source={dbPath}";
+        private readonly string _connectionString = $"Data Source={dbPath}";
 
         // テーブルの初期化を行う
         public void Initialize()

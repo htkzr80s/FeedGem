@@ -1,13 +1,12 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
-using HtmlAgilityPack;
 using Microsoft.VisualBasic;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
-using System.Net.Http;
 using System.ServiceModel.Syndication;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,19 +16,17 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Xml;
+using System.Xml.Linq;
 
 namespace FeedGem
 {
     public partial class MainWindow : Window
     {
+        private static readonly ObservableCollection<ArticleItem> value = [];
         #region --- フィールド定義 ---
 
-        // HTTP通信用のクライアントインスタンスを生成
-        // アプリケーション全体で再利用してリソースの枯渇を防ぐ
-        private static readonly HttpClient httpClient = new();
-
         // 記事リスト（中央ペイン）に表示するためのデータ管理用
-        private ObservableCollection<ArticleItem> currentArticles = [];
+        private readonly ObservableCollection<ArticleItem> currentArticles = value;
 
         // データベース操作を専門に行うインスタンス
         private readonly FeedRepository _repository;
@@ -82,7 +79,7 @@ namespace FeedGem
                 await PreviewBrowser.EnsureCoreWebView2Async(null);
 
                 // ヘルパークラスを使ってHTMLを生成する
-                string html = FeedGem.Helpers.FeedHelper.GeneratePreviewHtml(selectedArticle.Title, selectedArticle.Summary);
+                string html = FeedHelper.GeneratePreviewHtml(selectedArticle.Title, selectedArticle.Summary);
 
                 // プレビュー表示
                 PreviewBrowser.NavigateToString(html);
@@ -285,6 +282,39 @@ namespace FeedGem
             }
         }
 
+        // 新しいフォルダを作成する処理
+        private async void CreateFolder_Click(object sender, RoutedEventArgs e)
+        {
+            // ユーザーに入力ダイアログを出す（Microsoft.VisualBasicの参照が必要）
+            string folderName = Microsoft.VisualBasic.Interaction.InputBox(
+                "新しいフォルダ名を入力してください：", "フォルダ作成", "新しいフォルダ");
+
+            if (string.IsNullOrWhiteSpace(folderName)) return;
+
+            try
+            {
+                // DB上ではfolder_pathがディレクトリ構造を表しているから
+                // 「ダミーのフィード」をそのパスに入れてやることで、フォルダを出現させるよ
+                // URLは重複しないように、guidなどを使ってユニークにする
+                string dummyUrl = $"folder://{Guid.NewGuid()}";
+
+                // "/" 始まりでなければ補完する
+                string path = folderName.StartsWith('/') ? folderName : "/" + folderName;
+
+                // DBに登録（タイトルをフォルダ名と同じにしておけば管理しやすいね）
+                await _repository.AddFeedAsync(path, $"({folderName}の管理用項目)", dummyUrl);
+
+                LogTextBlock.Text = $"フォルダ「{folderName}」を作成しました。";
+
+                // ツリーを再構築して、新しく作ったフォルダを表示させる
+                await LoadFeedsToTreeViewAsync();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"フォルダ作成中にエラーが発生しました。\n{ex.Message}");
+            }
+        }
+
         // フィードの所属フォルダを変更する処理
         private async void MoveFolder_Click(object sender, RoutedEventArgs e)
         {
@@ -301,12 +331,130 @@ namespace FeedGem
                     if (!string.IsNullOrWhiteSpace(newFolder))
                     {
                         // 先頭が / で始まっていない場合は補完する
-                        if (!newFolder.StartsWith("/")) newFolder = "/" + newFolder;
+                        if (!newFolder.StartsWith('/')) newFolder = "/" + newFolder;
 
                         await _repository.UpdateFeedAsync(feedId, newFolder, target.Title, target.Url);
                         await LoadFeedsToTreeViewAsync(); // ツリーを再描画
                     }
                 }
+            }
+        }
+
+        // 右クリック時に、マウスの下にあるTreeViewItemを自動的に選択状態にする処理
+        private void FeedTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource is DependencyObject depObj)
+            {
+                // クリックされたUI要素から親を辿ってTreeViewItemを探す
+                bool v = depObj is TreeViewItem;
+                while (depObj != null && !v)
+                {
+                    depObj = VisualTreeHelper.GetParent(depObj);
+                }
+
+                if (depObj is TreeViewItem item)
+                {
+                    item.Focus();
+                    item.IsSelected = true;
+                }
+            }
+        }
+
+        // OPMLファイルを読み込んでフィードを一括登録する
+        private async void ImportOpml_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                var doc = XDocument.Load(dialog.FileName);
+                var body = doc.Root?.Element("body");
+                if (body == null) return;
+
+                int count = 0;
+                // 再帰的にoutlineタグを解析してフォルダ構造を維持する
+                await ProcessOutlineElements(body.Elements("outline"), "/");
+
+                async Task ProcessOutlineElements(IEnumerable<XElement> elements, string currentPath)
+                {
+                    foreach (var outline in elements)
+                    {
+                        string title = outline.Attribute("text")?.Value ?? outline.Attribute("title")?.Value ?? "無題";
+                        string xmlUrl = outline.Attribute("xmlUrl")?.Value ?? "";
+
+                        if (!string.IsNullOrEmpty(xmlUrl))
+                        {
+                            // フィードURLがある場合は登録
+                            await _repository.AddFeedAsync(currentPath, title, xmlUrl);
+                            count++;
+                        }
+                        else if (outline.Elements("outline").Any())
+                        {
+                            // 子のoutlineがある場合はフォルダとして扱い、中身を解析
+                            string nextPath = currentPath == "/" ? $"/{title}" : $"{currentPath}/{title}";
+                            await ProcessOutlineElements(outline.Elements("outline"), nextPath);
+                        }
+                    }
+                }
+
+                LogTextBlock.Text = $"{count}件のフィードをインポートしました。";
+                await LoadFeedsToTreeViewAsync();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"インポート失敗: {ex.Message}");
+            }
+        }
+
+        // 現在のフィード一覧をOPML形式で書き出す
+        private async void ExportOpml_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                var feeds = await _repository.GetAllFeedsAsync();
+
+                // 階層構造を作るための下準備
+                var rootElement = new XElement("opml", new XAttribute("version", "2.0"),
+                                    new XElement("head", new XElement("title", "FeedGem Export")),
+                                    new XElement("body"));
+
+                var body = rootElement.Element("body");
+                if (body == null) return;
+
+                // フォルダごとにグループ化して出力
+                var folders = feeds.GroupBy(f => f.FolderPath);
+                foreach (var folder in folders)
+                {
+                    XContainer targetContainer = body;
+
+                    // ルート以外ならフォルダ用のoutlineタグを作る
+                    if (folder.Key != "/")
+                    {
+                        var folderNode = new XElement("outline", new XAttribute("text", folder.Key.TrimStart('/')));
+                        body.Add(folderNode);
+                        targetContainer = folderNode;
+                    }
+
+                    foreach (var f in folder)
+                    {
+                        targetContainer.Add(new XElement("outline",
+                            new XAttribute("text", f.Title),
+                            new XAttribute("title", f.Title),
+                            new XAttribute("type", "rss"),
+                            new XAttribute("xmlUrl", f.Url)));
+                    }
+                }
+
+                new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rootElement).Save(dialog.FileName);
+                LogTextBlock.Text = "エクスポートが完了しました。";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"エクスポート失敗: {ex.Message}");
             }
         }
         #endregion
@@ -380,101 +528,8 @@ namespace FeedGem
             }
         }
 
-        // URLからフィード（RSS/Atom）の候補を探すメソッド
-        private async Task<List<FeedCandidate>> DiscoverFeedsAsync(string targetUrl)
-        {
-            var candidates = new List<FeedCandidate>();
-
-            // 1. まず入力されたURLそのものをフィードとして試す（SourceForge直入力などのケース）
-            try
-            {
-                using var reader = XmlReader.Create(targetUrl);
-                var feed = SyndicationFeed.Load(reader);
-                candidates.Add(new FeedCandidate { Title = feed.Title.Text, Url = targetUrl });
-                return candidates;
-            }
-            catch { /* 次のHTML解析へ */ }
-
-            // 2. HTML内からフィードURLを探す
-            try
-            {
-                var web = new HtmlWeb();
-                var doc = await web.LoadFromWebAsync(targetUrl);
-
-                // RSS/Atomを示唆するlinkタグを広めに探す
-                var nodes = doc.DocumentNode.SelectNodes("//link[@rel='alternate' or @type='application/rss+xml' or @type='application/atom+xml']");
-
-                if (nodes != null)
-                {
-                    foreach (var node in nodes)
-                    {
-                        string href = node.GetAttributeValue("href", "");
-                        string type = node.GetAttributeValue("type", "").ToLower();
-                        string title = node.GetAttributeValue("title", "");
-
-                        if (string.IsNullOrEmpty(href)) continue;
-
-                        // 記事そのもののリンクや、コメント用フィードなどを除外するフィルタ
-                        if (href.Contains("comment") || href.Contains("trackback")) continue;
-
-                        // 相対パス（/feed等）を絶対パス（https://.../feed）に変換
-                        Uri baseUri = new Uri(targetUrl);
-                        Uri fullUri = new Uri(baseUri, href);
-                        string absoluteUrl = fullUri.AbsoluteUri;
-
-                        // タイトルが空ならサイトの<title>を借りる
-                        if (string.IsNullOrWhiteSpace(title) || title.ToUpper() == "RSS")
-                        {
-                            title = doc.DocumentNode.SelectSingleNode("//title")?.InnerText?.Trim() ?? "不明なフィード";
-                        }
-
-                        // 重複チェックをして追加
-                        if (!candidates.Any(c => c.Url == absoluteUrl))
-                        {
-                            candidates.Add(new FeedCandidate { Title = title, Url = absoluteUrl });
-                        }
-                    }
-                }
-            }
-            catch { /* 次のHTML解析へ */ }
-
-            // 3. よくあるフィードURLを推測して試す
-            var commonPaths = new[]
-            {
-                "/feed",
-                "/rss",
-                "/rss.xml",
-                "/atom.xml",
-                "/index.xml",
-                "/feeds/posts/default" // FC2やBlogger系
-            };
-
-            foreach (var path in commonPaths)
-            {
-                try
-                {
-                    Uri baseUri = new Uri(targetUrl);
-                    Uri testUri = new Uri(baseUri, path);
-
-                    using var reader = XmlReader.Create(testUri.AbsoluteUri);
-                    var feed = SyndicationFeed.Load(reader);
-
-                    if (feed != null && !candidates.Any(c => c.Url == testUri.AbsoluteUri))
-                    {
-                        candidates.Add(new FeedCandidate
-                        {
-                            Title = feed.Title?.Text ?? "フィード",
-                            Url = testUri.AbsoluteUri
-                        });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"探索エラー: {ex.Message}");
-                }
-            }
-            return candidates;
-        }
+        // フィード候補を探す処理（実態は FeedHelper に移譲）
+        private static async Task<List<FeedCandidate>> DiscoverFeedsAsync(string targetUrl) => await FeedHelper.DiscoverFeedsAsync(targetUrl);
         #endregion
 
         #region --- DBアクセス ---
@@ -491,20 +546,21 @@ namespace FeedGem
             foreach (var feed in feeds)
             {
                 // フォルダパス（例: /News/Tech）を「/」で区切って階層を作る
-                var pathParts = feed.FolderPath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                var pathParts = feed.FolderPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
                 ItemsControl parent = FeedTreeView;
                 string currentKey = "";
 
                 foreach (var part in pathParts)
                 {
                     currentKey += "/" + part;
-                    if (!folderNodes.ContainsKey(currentKey))
+                    if (!folderNodes.TryGetValue(currentKey, out TreeViewItem? value))
                     {
                         var newNode = new TreeViewItem { Header = part, IsExpanded = true };
                         parent.Items.Add(newNode);
-                        folderNodes[currentKey] = newNode;
+                        value = newNode;
+                        folderNodes[currentKey] = value;
                     }
-                    parent = folderNodes[currentKey];
+                    parent = value;
                 }
 
                 // 実際のフィードノードを作成

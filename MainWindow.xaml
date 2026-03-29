@@ -18,13 +18,18 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5">
+            <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5" PreviewMouseRightButtonDown="FeedTreeView_PreviewMouseRightButtonDown">
                 <TreeView.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="フォルダを変更" Click="MoveFolder_Click"/>
-                        <MenuItem Header="名前を変更" Click="RenameFeed_Click"/>
+                        <MenuItem Header="新しいフォルダ" Click="CreateFolder_Click"/>
                         <Separator/>
-                        <MenuItem Header="このサイトを削除" Click="DeleteFeed_Click" Foreground="Red"/>
+                        <MenuItem Header="OPMLをインポート" Click="ImportOpml_Click"/>
+                        <MenuItem Header="OPMLをエクスポート" Click="ExportOpml_Click"/>
+                        <Separator/>
+                        <MenuItem Header="名前を変更" Click="RenameFeed_Click"/>
+                        <MenuItem Header="フォルダを移動" Click="MoveFolder_Click"/>
+                        <Separator/>
+                        <MenuItem Header="削除" Click="DeleteFeed_Click" Foreground="Red"/>
                     </ContextMenu>
                 </TreeView.ContextMenu>
             </TreeView>
