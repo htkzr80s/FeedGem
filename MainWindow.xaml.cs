@@ -462,13 +462,10 @@ namespace FeedGem
         #region --- UI生成ヘルパー ---
 
         // フォルダ・フィード用のヘッダーUI（アイコン付き）を生成する
-        private static StackPanel CreateTreeItemHeader(string text, bool isFolder, string? url = null)
+        private StackPanel CreateTreeItemHeader(string text, bool isFolder, string url = null)
         {
-            var panel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 2, 0, 2)
-            };
+            var panel = new StackPanel { Orientation = Orientation.Horizontal };
+            panel.Margin = new Thickness(0, 2, 0, 2);
 
             if (isFolder)
             {
@@ -565,7 +562,7 @@ namespace FeedGem
             if (targetItem == _dragSourceItem) return;
 
             // 今回はフィードの移動のみサポート（フォルダ自体の移動は中身のケアが必要なので弾く）
-            if (_dragSourceItem.Tag is not long feedId)
+            if (!(_dragSourceItem.Tag is long feedId))
             {
                 MessageBox.Show("フォルダの移動は今回対象外だよ。");
                 return;

@@ -41,7 +41,6 @@
                         <MenuItem Header="OPMLをエクスポート" Click="ExportOpml_Click"/>
                         <Separator/>
                         <MenuItem Header="名前を変更" Click="RenameFeed_Click"/>
-                        <MenuItem Header="フォルダを移動" Click="MoveFolder_Click"/>
                         <Separator/>
                         <MenuItem Header="削除" Click="DeleteFeed_Click" Foreground="Red"/>
                     </ContextMenu>
