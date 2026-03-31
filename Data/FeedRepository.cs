@@ -1,8 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
+﻿using FeedGem.Models;
 using Microsoft.Data.Sqlite;
-using FeedGem.Models;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace FeedGem.Data
 {
@@ -101,19 +102,29 @@ namespace FeedGem.Data
             return articles;
         }
 
-        // フィード情報を新規登録する
+        // フィード情報・フォルダを登録する
         public async Task AddFeedAsync(string folderPath, string title, string url)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            string insertQuery = "INSERT OR IGNORE INTO feeds (folder_path, title, url) VALUES (@folderPath, @title, @url)";
+            // 重複チェックを厳密に行うためのクエリ
+            string insertQuery = "INSERT INTO feeds (folder_path, title, url) VALUES (@folderPath, @title, @url)";
             using var command = new SqliteCommand(insertQuery, connection);
-            command.Parameters.AddWithValue("@folderPath", folderPath);
-            command.Parameters.AddWithValue("@title", title);
-            command.Parameters.AddWithValue("@url", url);
 
-            await command.ExecuteNonQueryAsync();
+            command.Parameters.AddWithValue("@folderPath", folderPath); // フォルダなら通常は "/"
+            command.Parameters.AddWithValue("@title", title);          // フォルダ名
+            command.Parameters.AddWithValue("@url", url);            // 識別用の unique な文字列
+
+            try
+            {
+                await command.ExecuteNonQueryAsync();
+            }
+            catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // 19 は Constraint 違反（重複など）
+            {
+                // すでに存在する場合は何もしない、あるいはログを出す
+                Debug.WriteLine("既に存在するURLのためスキップされました。");
+            }
         }
 
         // 記事データを保存する

@@ -1,13 +1,13 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
-using Microsoft.VisualBasic;
+using FeedGem.Services;
+using FeedGem.UIHelpers;
 using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Linq;
-using System.ServiceModel.Syndication;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -15,7 +15,6 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Xml;
 using System.Xml.Linq;
 
 namespace FeedGem
@@ -30,24 +29,56 @@ namespace FeedGem
 
         // データベース操作を専門に行うインスタンス
         private readonly FeedRepository _repository;
+
+        private readonly FeedService _feedService;
+        private readonly FeedDiscoveryService _discoveryService;
+        private readonly TreeBuilder _treeBuilder;
+        private readonly ContextMenuBuilder _menuBuilder;
+        private readonly TreeDragDropHandler _dragHandler;
+        private readonly FeedUpdateService _updateService;
         #endregion
 
         #region --- 初期設定系 ---
         public MainWindow()
         {
             InitializeComponent();
+
+            // 画面が表示された後に実行する
+            this.Loaded += (s, e) =>
+            {
+                TestArea.Run();
+            };
+
             SetupWindowIcon();
 
             // リポジトリを初期化（ファイルパスを指定）
             _repository = new FeedRepository("feedgem.db");
             _repository.Initialize(); // 旧 InitializeDatabase() の代わり
 
+            _feedService = new FeedService(_repository);
+            _updateService = new FeedUpdateService(_repository, _feedService);
+            _discoveryService = new FeedDiscoveryService();
+            _treeBuilder = new TreeBuilder(_repository);
+
             // 起動時にデータを画面に反映させる
             _ = LoadFeedsToTreeViewAsync();
 
             // バックグラウンドでの更新処理を開始
-            _ = UpdateAllFeedsAsync();
+            _ = _updateService.UpdateAllAsync();
             _ = StartBackgroundPollingAsync();
+
+            _menuBuilder = new ContextMenuBuilder(
+                _repository,
+                _feedService,
+                _updateService,
+                LoadFeedsToTreeViewAsync,
+                LogTextBlock
+            );
+
+            _dragHandler = new TreeDragDropHandler(
+                _repository,
+                LoadFeedsToTreeViewAsync
+            );
         }
 
         // 高DPIアイコンをウィンドウに適用する
@@ -135,7 +166,7 @@ namespace FeedGem
             if (string.IsNullOrEmpty(url) || url == "URLを入力してEnter...") return;
 
             // フィードの探索
-            var candidates = await DiscoverFeedsAsync(url);
+            var candidates = await _discoveryService.DiscoverFeedsAsync(url);
 
             bool added = false; // 追加が行われたかを判定するフラグ
 
@@ -146,7 +177,7 @@ namespace FeedGem
                 await _repository.AddFeedAsync("/", selected.Title, selected.Url);
 
                 // 登録直後に記事をダウンロードする
-                await FetchAndSaveEntriesAsync(selected.Url);
+                await _feedService.FetchAndSaveEntriesAsync(selected.Url);
 
                 added = true;
             }
@@ -160,7 +191,7 @@ namespace FeedGem
                     foreach (var selected in selectionWindow.SelectedFeeds)
                     {
                         await _repository.AddFeedAsync("/", selected.Title, selected.Url);
-                        await FetchAndSaveEntriesAsync(selected.Url);
+                        await _feedService.FetchAndSaveEntriesAsync(selected.Url);
                     }
                     added = true;
                 }
@@ -222,104 +253,25 @@ namespace FeedGem
             FilterBox.Text = ""; // 検索バーを空にする（これで自動的にフィルタも解除される）
         }
 
-        // フォルダ削除の実体処理
-        private async Task DeleteFolder_Click(string folderPath)
-        {
-            // ルートフォルダは守る
-            if (string.IsNullOrEmpty(folderPath) || folderPath == "/") return;
-
-            // 中身があるか確認
-            bool isEmpty = await _repository.IsFolderEmptyAsync(folderPath);
-
-            if (!isEmpty)
-            {
-                var result = MessageBox.Show(
-                    $"フォルダ '{folderPath}' 内のフィードもすべて削除されますが、よろしいですか？",
-                    "フォルダ削除の確認",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-
-                if (result != MessageBoxResult.Yes) return;
-            }
-
-            try
-            {
-                await _repository.DeleteFolderAsync(folderPath);
-                await LoadFeedsToTreeViewAsync();
-                LogTextBlock.Text = "フォルダを削除したよ。";
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"削除失敗: {ex.Message}");
-            }
-        }
-
         // 右クリックメニューの動的生成と表示
         private void FeedTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
             var treeViewItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
-            if (treeViewItem == null) return;
 
-            treeViewItem.Focus();
-            treeViewItem.IsSelected = true;
+            var menu = _menuBuilder.Build(treeViewItem);
 
-            var menu = new ContextMenu();
-
-            // --- 1. 更新処理（引数をurlのみに修正） ---
-            MenuItem refreshItem = new MenuItem { Header = "今すぐ更新" };
-            refreshItem.Click += async (s, ev) => {
-                LogTextBlock.Text = "記事を更新中...";
-
-                var feeds = await _repository.GetAllFeedsAsync();
-                foreach (var feed in feeds.Where(f => !f.Url.StartsWith("folder://")))
-                {
-                    // 君の環境に合わせて引数を url だけに修正したよ
-                    await FetchAndSaveEntriesAsync(feed.Url);
-                }
-
-                await LoadFeedsToTreeViewAsync();
-                LogTextBlock.Text = "更新が完了したよ。";
-            };
-            menu.Items.Add(refreshItem);
-
-            menu.Items.Add(new Separator());
-
-            // --- 2. フォルダ・フィード別のメニュー ---
-            if (treeViewItem.Tag is string folderPath)
+            if (treeViewItem != null)
             {
-                // フォルダ作成
-                MenuItem addFolderItem = new MenuItem { Header = "新しいフォルダを作成..." };
-                addFolderItem.Click += async (s, ev) => {
-                    string newName = Interaction.InputBox("新しいフォルダの名前を入力してください", "フォルダの作成", "");
-                    if (!string.IsNullOrWhiteSpace(newName))
-                    {
-                        string newPath = (folderPath == "/" ? "/" : folderPath + "/") + newName;
-                        await _repository.AddFeedAsync(newPath, newName, "folder://" + Guid.NewGuid());
-                        await LoadFeedsToTreeViewAsync();
-                    }
-                };
-                menu.Items.Add(addFolderItem);
-
-                // フォルダ削除
-                MenuItem deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
-                deleteFolderItem.Click += async (s, ev) => await DeleteFolder_Click(folderPath);
-                menu.Items.Add(deleteFolderItem);
+                treeViewItem.Focus();
+                treeViewItem.IsSelected = true;
+                treeViewItem.ContextMenu = menu;
             }
-            else if (treeViewItem.Tag is long feedId)
+            else
             {
-                // フィード削除（購読解除）
-                MenuItem deleteFeedItem = new MenuItem { Header = "このフィードを削除", Foreground = Brushes.Red };
-                deleteFeedItem.Click += async (s, ev) => {
-                    if (MessageBox.Show("このフィードを削除してもよろしいですか？", "確認", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
-                    {
-                        await _repository.DeleteFeedAsync(feedId);
-                        await LoadFeedsToTreeViewAsync();
-                    }
-                };
-                menu.Items.Add(deleteFeedItem);
+                FeedTreeView.ContextMenu = menu;
             }
 
-            treeViewItem.ContextMenu = menu;
+            menu.IsOpen = true;
             e.Handled = true;
         }
 
@@ -481,109 +433,28 @@ namespace FeedGem
 
         #region --- ドラッグ＆ドロップ関連 ---
 
-        private Point _startPoint;
-        private TreeViewItem? _dragSourceItem;
-
         // ドラッグ開始位置の記録
         private void FeedTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            _startPoint = e.GetPosition(null);
+            _dragHandler.OnMouseLeftButtonDown(e);
         }
 
         // マウス移動時にドラッグを開始する
         private void FeedTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
         {
-            if (e.LeftButton == MouseButtonState.Pressed)
-            {
-                Point mousePos = e.GetPosition(null);
-                Vector diff = _startPoint - mousePos;
-
-                // 一定距離マウスが動いたらドラッグと判定
-                if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-                    Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
-                {
-                    var treeViewItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
-                    if (treeViewItem != null)
-                    {
-                        _dragSourceItem = treeViewItem;
-                        DragDrop.DoDragDrop(treeViewItem, treeViewItem, DragDropEffects.Move);
-                    }
-                }
-            }
+            _dragHandler.OnMouseMove(sender, e);
         }
 
         // ドラッグ中のマウスカーソル状態
         private void FeedTreeView_DragOver(object sender, DragEventArgs e)
         {
-            e.Effects = DragDropEffects.Move;
-            e.Handled = true;
+            _dragHandler.OnDragOver(e);
         }
 
         // ドロップされた時の処理
         private async void FeedTreeView_Drop(object sender, DragEventArgs e)
         {
-            if (_dragSourceItem == null || _dragSourceItem.Tag is not long sourceFeedId) return;
-
-            var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
-            if (targetItem == _dragSourceItem) return;
-
-            string newFolderPath = "/";
-            int targetIndex = -1; // -1は末尾追加を意味する
-            ItemsControl targetParent = FeedTreeView;
-
-            // ドロップ先の解析
-            if (targetItem != null)
-            {
-                if (targetItem.Tag is string folderPath)
-                {
-                    // フォルダへのドロップ時はフォルダの末尾に追加する
-                    newFolderPath = folderPath;
-                    targetParent = targetItem;
-                    targetIndex = targetItem.Items.Count;
-                }
-                else if (targetItem.Tag is long)
-                {
-                    // 別のフィード要素へのドロップ時は、その要素と同じフォルダ内の該当インデックスに挿入する
-                    var parentItem = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(targetItem));
-                    newFolderPath = parentItem?.Tag as string ?? "/";
-                    targetParent = parentItem ?? (ItemsControl)FeedTreeView;
-                    targetIndex = targetParent.Items.IndexOf(targetItem);
-                }
-            }
-
-            var feeds = await _repository.GetAllFeedsAsync();
-            var sourceFeed = feeds.FirstOrDefault(f => f.Id == sourceFeedId);
-
-            if (sourceFeed != null)
-            {
-                // 所属フォルダパスを更新する
-                await _repository.UpdateFeedAsync(sourceFeedId, newFolderPath, sourceFeed.Title, sourceFeed.Url);
-
-                // ドロップ先フォルダ内の全アイテム（自分以外）を取得し、現在の順序で並べる
-                var targetFolderFeeds = feeds
-                    .Where(f => f.FolderPath == newFolderPath && f.Id != sourceFeedId)
-                    .OrderBy(f => f.SortOrder)
-                    .ToList();
-
-                // 計算したインデックス位置へ自身を挿入する
-                if (targetIndex >= 0 && targetIndex <= targetFolderFeeds.Count)
-                {
-                    targetFolderFeeds.Insert(targetIndex, sourceFeed);
-                }
-                else
-                {
-                    targetFolderFeeds.Add(sourceFeed);
-                }
-
-                // フォルダ内のすべての要素のsort_orderを再割り当てしてDBを更新する
-                for (int i = 0; i < targetFolderFeeds.Count; i++)
-                {
-                    await _repository.UpdateFeedOrderAsync(targetFolderFeeds[i].Id, i);
-                }
-
-                // ツリーを再構築して画面に反映する
-                await LoadFeedsToTreeViewAsync();
-            }
+            await _dragHandler.OnDrop(sender, e);
         }
 
         // 指定した型の親要素をビジュアルツリーから探し出す
@@ -609,66 +480,9 @@ namespace FeedGem
             // タイマーのチック発生ごとにループを実行
             while (await timer.WaitForNextTickAsync())
             {
-                await UpdateAllFeedsAsync();
+                await _updateService.UpdateAllAsync();
             }
         }
-
-        // すべてのフィードを巡回して最新記事を取得・保存する
-        private async Task UpdateAllFeedsAsync()
-        {
-            // 登録されている全フィードを取得
-            var feeds = await _repository.GetAllFeedsAsync();
-
-            foreach (var feed in feeds)
-            {
-                try
-                {
-                    // インターネットからフィードをダウンロード
-                    using var reader = XmlReader.Create(feed.Url);
-                    var rssData = SyndicationFeed.Load(reader);
-
-                    // 記事を一つずつチェックして保存
-                    foreach (var item in rssData.Items)
-                    {
-                        // 修正箇所1：タイトルが空の場合の対策
-                        string title = item.Title?.Text ?? "無題";
-                        string url = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-                        string summary = item.Summary?.Text ?? "";
-
-                        // 修正箇所2：日付データが欠落している際のエラー対策
-                        DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
-                                               item.LastUpdatedTime != default ? item.LastUpdatedTime :
-                                               DateTimeOffset.Now;
-
-                        // リポジトリ経由でデータベースに保存
-                        await _repository.SaveEntryAsync(feed.Id, title, url, summary, pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm"));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // 通信エラーなどはデバッグ出力に記録して次へ進む
-                    Debug.WriteLine($"フィード更新失敗: {feed.Title} - {ex.Message}");
-                }
-            }
-
-            // 古い記事の自動削除を実行
-            await _repository.DeleteOldEntriesAsync();
-
-            // 画面上の最終更新時刻を更新
-            await Dispatcher.InvokeAsync(() =>
-            {
-                LastUpdateTextBlock.Text = $"最終更新: {DateTime.Now:HH:mm:ss}";
-            });
-
-            // 念のため、現在表示中の記事リストもリフレッシュする
-            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode && selectedNode.Tag is long feedId)
-            {
-                await LoadEntriesToListViewAsync(feedId);
-            }
-        }
-
-        // フィード候補を探す処理（実態は FeedHelper に移譲）
-        private static async Task<List<FeedCandidate>> DiscoverFeedsAsync(string targetUrl) => await FeedHelper.DiscoverFeedsAsync(targetUrl);
         #endregion
 
         #region --- DBアクセス ---
@@ -677,56 +491,36 @@ namespace FeedGem
         private async Task LoadFeedsToTreeViewAsync()
         {
             FeedTreeView.Items.Clear();
-            var feeds = await _repository.GetAllFeedsAsync();
 
-            var folderNodes = new Dictionary<string, TreeViewItem>();
+            var nodes = await _treeBuilder.BuildTreeAsync();
 
-            foreach (var feed in feeds)
+            foreach (var node in nodes)
             {
-                var pathParts = feed.FolderPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
-                ItemsControl parent = FeedTreeView;
-                string currentKey = "";
+                // フィード選択イベント再設定
+                AttachSelectionHandler(node);
 
-                foreach (var part in pathParts)
+                FeedTreeView.Items.Add(node);
+            }
+        }
+
+        // TreeViewItemに選択イベントを再帰的に付与する
+        private void AttachSelectionHandler(TreeViewItem item)
+        {
+            if (item.Tag is long feedId)
+            {
+                item.Selected += async (s, e) =>
                 {
-                    currentKey += "/" + part;
-                    if (!folderNodes.TryGetValue(currentKey, out TreeViewItem? value))
-                    {
-                        // 変更：リッチなUIを設定し、Tagにフォルダのパス文字列を保持させる
-                        var newNode = new TreeViewItem
-                        {
-                            Header = CreateTreeItemHeader(part, true),
-                            IsExpanded = true,
-                            Tag = currentKey
-                        };
-                        parent.Items.Add(newNode);
-                        value = newNode;
-                        folderNodes[currentKey] = value;
-                    }
-                    parent = value;
-                }
-
-                // フォルダ作成用のダミーフィード（folder://で始まる）の場合は非表示にするためスキップ
-                if (feed.Url.StartsWith("folder://"))
-                {
-                    continue;
-                }
-
-                int unreadCount = await _repository.GetUnreadCountAsync(feed.Id);
-                string displayText = unreadCount > 0 ? $"{feed.Title} ({unreadCount})" : feed.Title;
-
-                // 変更：Favicon対応のUIを設定
-                var feedNode = new TreeViewItem
-                {
-                    Header = CreateTreeItemHeader(displayText, false, feed.Url),
-                    Tag = feed.Id // 記事の場合はlong型のIDを保持
-                };
-                feedNode.Selected += async (s, e) => {
                     e.Handled = true;
-                    await LoadEntriesToListViewAsync(feed.Id);
+                    await LoadEntriesToListViewAsync(feedId);
                 };
+            }
 
-                parent.Items.Add(feedNode);
+            foreach (var child in item.Items)
+            {
+                if (child is TreeViewItem childItem)
+                {
+                    AttachSelectionHandler(childItem);
+                }
             }
         }
 
@@ -740,47 +534,6 @@ namespace FeedGem
                 currentArticles.Add(article);
             }
             ArticleListView.ItemsSource = currentArticles;
-        }
-
-        // 指定されたURLから記事を取得し、データベースに保存する
-        private async Task FetchAndSaveEntriesAsync(string url)
-        {
-            // DBから登録情報の詳細（IDなど）を逆引きする
-            var feeds = await _repository.GetAllFeedsAsync();
-            var target = feeds.FirstOrDefault(f => f.Url == url);
-            if (target == null) return;
-
-            try
-            {
-                using var reader = XmlReader.Create(url);
-                var rssData = SyndicationFeed.Load(reader);
-
-                foreach (var item in rssData.Items)
-                {
-                    string title = item.Title?.Text ?? "無題";
-                    string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-                    string summary = item.Summary?.Text ?? "";
-                    if (string.IsNullOrEmpty(summary) && item.Content is TextSyndicationContent textContent)
-                    {
-                        summary = textContent.Text;
-                    }
-                    summary ??= ""; // それでもnullなら空文字に
-
-                    // 安全な日付取得
-                    DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
-                                           item.LastUpdatedTime != default ? item.LastUpdatedTime :
-                                           DateTimeOffset.Now;
-
-                    // リポジトリに保存を依頼
-                    await _repository.SaveEntryAsync(target.Id, title, link, summary, pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm"));
-                }
-                // 記事の取得が終わったら、古い記事を掃除する
-                await _repository.DeleteOldEntriesAsync();
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"記事取得失敗: {ex.Message}");
-            }
         }
         #endregion
     }
