@@ -37,6 +37,14 @@ namespace FeedGem.Data
 
             using var command = new SqliteCommand(createTableQuery, connection);
             command.ExecuteNonQuery();
+
+            // 既存テーブルへのカラム追加（既に存在する場合はエラーになるため無視する）
+            try
+            {
+                using var alterCommand = new SqliteCommand("ALTER TABLE feeds ADD COLUMN sort_order INTEGER DEFAULT 0;", connection);
+                alterCommand.ExecuteNonQuery();
+            }
+            catch { /* 無視 */ }
         }
 
         // 購読中のフィード一覧を取得する
@@ -46,12 +54,11 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            string query = "SELECT id, folder_path, title, url FROM feeds ORDER BY folder_path, title";
-            // データベースから全フィードのURLを取得
+            // sort_orderを追加し、ソート条件に含める
+            string query = "SELECT id, folder_path, title, url, sort_order FROM feeds ORDER BY folder_path, sort_order, title";
             using var command = new SqliteCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();
 
-            // 各フィードの取得処理を順次実行
             while (await reader.ReadAsync())
             {
                 feeds.Add(new FeedInfo
@@ -59,7 +66,8 @@ namespace FeedGem.Data
                     Id = reader.GetInt64(0),
                     FolderPath = reader.GetString(1),
                     Title = reader.GetString(2),
-                    Url = reader.GetString(3)
+                    Url = reader.GetString(3),
+                    SortOrder = reader.GetInt32(4) // sort_orderを読み込む
                 });
             }
             return feeds;
@@ -171,6 +179,20 @@ namespace FeedGem.Data
             await command.ExecuteNonQueryAsync();
         }
 
+        // フィードの並び順（sort_order）のみを更新する
+        public async Task UpdateFeedOrderAsync(long id, int sortOrder)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string updateQuery = "UPDATE feeds SET sort_order = @sortOrder WHERE id = @id";
+            using var command = new SqliteCommand(updateQuery, connection);
+            command.Parameters.AddWithValue("@sortOrder", sortOrder);
+            command.Parameters.AddWithValue("@id", id);
+
+            await command.ExecuteNonQueryAsync();
+        }
+
         // フィードを削除する（関連する記事も一緒に消す）
         public async Task DeleteFeedAsync(long id)
         {
@@ -229,5 +251,6 @@ namespace FeedGem.Data
         public string FolderPath { get; set; } = "/";
         public string Title { get; set; } = "";
         public string Url { get; set; } = "";
+        public int SortOrder { get; set; } = 0;
     }
 }

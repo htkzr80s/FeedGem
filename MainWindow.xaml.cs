@@ -462,10 +462,13 @@ namespace FeedGem
         #region --- UI生成ヘルパー ---
 
         // フォルダ・フィード用のヘッダーUI（アイコン付き）を生成する
-        private StackPanel CreateTreeItemHeader(string text, bool isFolder, string url = null)
+        private static StackPanel CreateTreeItemHeader(string text, bool isFolder, string? url = null)
         {
-            var panel = new StackPanel { Orientation = Orientation.Horizontal };
-            panel.Margin = new Thickness(0, 2, 0, 2);
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(0, 2, 0, 2)
+            };
 
             if (isFolder)
             {
@@ -556,44 +559,67 @@ namespace FeedGem
         // ドロップされた時の処理
         private async void FeedTreeView_Drop(object sender, DragEventArgs e)
         {
-            if (_dragSourceItem == null) return;
+            if (_dragSourceItem == null || _dragSourceItem.Tag is not long sourceFeedId) return;
 
             var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
             if (targetItem == _dragSourceItem) return;
 
-            // 今回はフィードの移動のみサポート（フォルダ自体の移動は中身のケアが必要なので弾く）
-            if (!(_dragSourceItem.Tag is long feedId))
-            {
-                MessageBox.Show("フォルダの移動は今回対象外だよ。");
-                return;
-            }
+            string newFolderPath = "/";
+            int targetIndex = -1; // -1は末尾追加を意味する
+            ItemsControl targetParent = FeedTreeView;
 
-            string newFolderPath = "/"; // デフォルトはルート
+            // ドロップ先の解析
             if (targetItem != null)
             {
                 if (targetItem.Tag is string folderPath)
                 {
-                    // ターゲットがフォルダノード
+                    // フォルダへのドロップ時はフォルダの末尾に追加する
                     newFolderPath = folderPath;
+                    targetParent = targetItem;
+                    targetIndex = targetItem.Items.Count;
                 }
                 else if (targetItem.Tag is long)
                 {
-                    // ターゲットが別のフィードノードなら、親のフォルダを取得
+                    // 別のフィード要素へのドロップ時は、その要素と同じフォルダ内の該当インデックスに挿入する
                     var parentItem = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(targetItem));
-                    if (parentItem != null && parentItem.Tag is string pPath)
-                    {
-                        newFolderPath = pPath;
-                    }
+                    newFolderPath = parentItem?.Tag as string ?? "/";
+                    targetParent = parentItem ?? (ItemsControl)FeedTreeView;
+                    targetIndex = targetParent.Items.IndexOf(targetItem);
                 }
             }
 
-            // DB上のフォルダパスを更新
             var feeds = await _repository.GetAllFeedsAsync();
-            var target = feeds.FirstOrDefault(f => f.Id == feedId);
-            if (target != null && target.FolderPath != newFolderPath)
+            var sourceFeed = feeds.FirstOrDefault(f => f.Id == sourceFeedId);
+
+            if (sourceFeed != null)
             {
-                await _repository.UpdateFeedAsync(feedId, newFolderPath, target.Title, target.Url);
-                await LoadFeedsToTreeViewAsync(); // ツリーを再描画
+                // 所属フォルダパスを更新する
+                await _repository.UpdateFeedAsync(sourceFeedId, newFolderPath, sourceFeed.Title, sourceFeed.Url);
+
+                // ドロップ先フォルダ内の全アイテム（自分以外）を取得し、現在の順序で並べる
+                var targetFolderFeeds = feeds
+                    .Where(f => f.FolderPath == newFolderPath && f.Id != sourceFeedId)
+                    .OrderBy(f => f.SortOrder)
+                    .ToList();
+
+                // 計算したインデックス位置へ自身を挿入する
+                if (targetIndex >= 0 && targetIndex <= targetFolderFeeds.Count)
+                {
+                    targetFolderFeeds.Insert(targetIndex, sourceFeed);
+                }
+                else
+                {
+                    targetFolderFeeds.Add(sourceFeed);
+                }
+
+                // フォルダ内のすべての要素のsort_orderを再割り当てしてDBを更新する
+                for (int i = 0; i < targetFolderFeeds.Count; i++)
+                {
+                    await _repository.UpdateFeedOrderAsync(targetFolderFeeds[i].Id, i);
+                }
+
+                // ツリーを再構築して画面に反映する
+                await LoadFeedsToTreeViewAsync();
             }
         }
 
@@ -715,6 +741,12 @@ namespace FeedGem
                         folderNodes[currentKey] = value;
                     }
                     parent = value;
+                }
+
+                // フォルダ作成用のダミーフィード（folder://で始まる）の場合は非表示にするためスキップ
+                if (feed.Url.StartsWith("folder://"))
+                {
+                    continue;
                 }
 
                 int unreadCount = await _repository.GetUnreadCountAsync(feed.Id);
