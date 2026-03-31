@@ -32,19 +32,6 @@
                         <Setter Property="Padding" Value="2,4"/>
                     </Style>
                 </TreeView.Resources>
-
-                <TreeView.ContextMenu>
-                    <ContextMenu>
-                        <MenuItem Header="新しいフォルダ" Click="CreateFolder_Click"/>
-                        <Separator/>
-                        <MenuItem Header="OPMLをインポート" Click="ImportOpml_Click"/>
-                        <MenuItem Header="OPMLをエクスポート" Click="ExportOpml_Click"/>
-                        <Separator/>
-                        <MenuItem Header="名前を変更" Click="RenameFeed_Click"/>
-                        <Separator/>
-                        <MenuItem Header="削除" Click="DeleteFeed_Click" Foreground="Red"/>
-                    </ContextMenu>
-                </TreeView.ContextMenu>
             </TreeView>
 
             <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="LightGray"/>

@@ -222,142 +222,105 @@ namespace FeedGem
             FilterBox.Text = ""; // 検索バーを空にする（これで自動的にフィルタも解除される）
         }
 
-        // フィード削除処理
-        private async void DeleteFeed_Click(object sender, RoutedEventArgs e)
+        // フォルダ削除の実体処理
+        private async Task DeleteFolder_Click(string folderPath)
         {
-            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode)
+            // ルートフォルダは守る
+            if (string.IsNullOrEmpty(folderPath) || folderPath == "/") return;
+
+            // 中身があるか確認
+            bool isEmpty = await _repository.IsFolderEmptyAsync(folderPath);
+
+            if (!isEmpty)
             {
-                // Tagが空（null）＝フォルダ
-                if (selectedNode.Tag == null)
-                {
-                    MessageBox.Show("フォルダの削除・編集機能は、中身への影響が大きいため今回は対象外だよ。");
-                    return;
-                }
+                var result = MessageBox.Show(
+                    $"フォルダ '{folderPath}' 内のフィードもすべて削除されますが、よろしいですか？",
+                    "フォルダ削除の確認",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
 
-                long feedId = (long)selectedNode.Tag;
-                var result = MessageBox.Show("このサイトと記事をすべて削除しますか？", "確認", MessageBoxButton.YesNo, MessageBoxImage.Warning);
-                
-                if (result == MessageBoxResult.Yes)
-                {
-                    await _repository.DeleteFeedAsync(feedId);
-                    currentArticles.Clear(); // 中央のリストをクリアする
-                    PreviewBrowser.Source = new Uri("about:blank"); // 右ペインをクリア
-                    await LoadFeedsToTreeViewAsync();
-                }
+                if (result != MessageBoxResult.Yes) return;
             }
-        }
-
-        // フィードの名前（タイトル）を変更する処理
-        private async void RenameFeed_Click(object sender, RoutedEventArgs e)
-        {
-            // ツリービューで選択されている項目を取得
-            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode)
-            {
-                // Tagが空（null）＝フォルダ
-                if (selectedNode.Tag == null)
-                {
-                    MessageBox.Show("フォルダの削除・編集機能は、中身への影響が大きいため今回は対象外だよ。");
-                    return;
-                }
-                // 現在の表示名から (未読数) を除いた純粋なタイトルを取得
-                string currentTitle = selectedNode.Header.ToString()!.Split(" (")[0];
-
-                // 入力ダイアログを表示
-                string newTitle = Interaction.InputBox("新しい名前を入力してください", "名前の変更", currentTitle);
-
-                long feedId = (long)selectedNode.Tag;
-
-                if (!string.IsNullOrWhiteSpace(newTitle) && newTitle != currentTitle)
-                {
-                    // DBの情報を更新（フォルダやURLはそのまま）
-                    var feeds = await _repository.GetAllFeedsAsync();
-                    var target = feeds.FirstOrDefault(f => f.Id == feedId);
-
-                    if (target != null)
-                    {
-                        await _repository.UpdateFeedAsync(feedId, target.FolderPath, newTitle, target.Url);
-                        await LoadFeedsToTreeViewAsync(); // ツリーを再描画
-                    }
-                }
-            }
-        }
-
-        // 新しいフォルダを作成する処理
-        private async void CreateFolder_Click(object sender, RoutedEventArgs e)
-        {
-            // ユーザーに入力ダイアログを出す（Microsoft.VisualBasicの参照が必要）
-            string folderName = Microsoft.VisualBasic.Interaction.InputBox(
-                "新しいフォルダ名を入力してください：", "フォルダ作成", "新しいフォルダ");
-
-            if (string.IsNullOrWhiteSpace(folderName)) return;
 
             try
             {
-                // DB上ではfolder_pathがディレクトリ構造を表しているから
-                // 「ダミーのフィード」をそのパスに入れてやることで、フォルダを出現させるよ
-                // URLは重複しないように、guidなどを使ってユニークにする
-                string dummyUrl = $"folder://{Guid.NewGuid()}";
-
-                // "/" 始まりでなければ補完する
-                string path = folderName.StartsWith('/') ? folderName : "/" + folderName;
-
-                // DBに登録（タイトルをフォルダ名と同じにしておけば管理しやすいね）
-                await _repository.AddFeedAsync(path, $"({folderName}の管理用項目)", dummyUrl);
-
-                LogTextBlock.Text = $"フォルダ「{folderName}」を作成しました。";
-
-                // ツリーを再構築して、新しく作ったフォルダを表示させる
+                await _repository.DeleteFolderAsync(folderPath);
                 await LoadFeedsToTreeViewAsync();
+                LogTextBlock.Text = "フォルダを削除したよ。";
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"フォルダ作成中にエラーが発生しました。\n{ex.Message}");
+                MessageBox.Show($"削除失敗: {ex.Message}");
             }
         }
 
-        // フィードの所属フォルダを変更する処理
-        private async void MoveFolder_Click(object sender, RoutedEventArgs e)
-        {
-            if (FeedTreeView.SelectedItem is TreeViewItem selectedNode && selectedNode.Tag is long feedId)
-            {
-                var feeds = await _repository.GetAllFeedsAsync();
-                var target = feeds.FirstOrDefault(f => f.Id == feedId);
-
-                if (target != null)
-                {
-                    // 現在のフォルダパスを入力初期値にする
-                    string newFolder = Interaction.InputBox("移動先のフォルダパスを入力してください\n例: /News/IT", "フォルダの変更", target.FolderPath);
-
-                    if (!string.IsNullOrWhiteSpace(newFolder))
-                    {
-                        // 先頭が / で始まっていない場合は補完する
-                        if (!newFolder.StartsWith('/')) newFolder = "/" + newFolder;
-
-                        await _repository.UpdateFeedAsync(feedId, newFolder, target.Title, target.Url);
-                        await LoadFeedsToTreeViewAsync(); // ツリーを再描画
-                    }
-                }
-            }
-        }
-
-        // 右クリック時に、マウスの下にあるTreeViewItemを自動的に選択状態にする処理
+        // 右クリックメニューの動的生成と表示
         private void FeedTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
-            if (e.OriginalSource is DependencyObject depObj)
-            {
-                // クリックされたUI要素から親を辿ってTreeViewItemを探す
-                bool v = depObj is TreeViewItem;
-                while (depObj != null && !v)
+            var treeViewItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
+            if (treeViewItem == null) return;
+
+            treeViewItem.Focus();
+            treeViewItem.IsSelected = true;
+
+            var menu = new ContextMenu();
+
+            // --- 1. 更新処理（引数をurlのみに修正） ---
+            MenuItem refreshItem = new MenuItem { Header = "今すぐ更新" };
+            refreshItem.Click += async (s, ev) => {
+                LogTextBlock.Text = "記事を更新中...";
+
+                var feeds = await _repository.GetAllFeedsAsync();
+                foreach (var feed in feeds.Where(f => !f.Url.StartsWith("folder://")))
                 {
-                    depObj = VisualTreeHelper.GetParent(depObj);
+                    // 君の環境に合わせて引数を url だけに修正したよ
+                    await FetchAndSaveEntriesAsync(feed.Url);
                 }
 
-                if (depObj is TreeViewItem item)
-                {
-                    item.Focus();
-                    item.IsSelected = true;
-                }
+                await LoadFeedsToTreeViewAsync();
+                LogTextBlock.Text = "更新が完了したよ。";
+            };
+            menu.Items.Add(refreshItem);
+
+            menu.Items.Add(new Separator());
+
+            // --- 2. フォルダ・フィード別のメニュー ---
+            if (treeViewItem.Tag is string folderPath)
+            {
+                // フォルダ作成
+                MenuItem addFolderItem = new MenuItem { Header = "新しいフォルダを作成..." };
+                addFolderItem.Click += async (s, ev) => {
+                    string newName = Interaction.InputBox("新しいフォルダの名前を入力してください", "フォルダの作成", "");
+                    if (!string.IsNullOrWhiteSpace(newName))
+                    {
+                        string newPath = (folderPath == "/" ? "/" : folderPath + "/") + newName;
+                        await _repository.AddFeedAsync(newPath, newName, "folder://" + Guid.NewGuid());
+                        await LoadFeedsToTreeViewAsync();
+                    }
+                };
+                menu.Items.Add(addFolderItem);
+
+                // フォルダ削除
+                MenuItem deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
+                deleteFolderItem.Click += async (s, ev) => await DeleteFolder_Click(folderPath);
+                menu.Items.Add(deleteFolderItem);
             }
+            else if (treeViewItem.Tag is long feedId)
+            {
+                // フィード削除（購読解除）
+                MenuItem deleteFeedItem = new MenuItem { Header = "このフィードを削除", Foreground = Brushes.Red };
+                deleteFeedItem.Click += async (s, ev) => {
+                    if (MessageBox.Show("このフィードを削除してもよろしいですか？", "確認", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                    {
+                        await _repository.DeleteFeedAsync(feedId);
+                        await LoadFeedsToTreeViewAsync();
+                    }
+                };
+                menu.Items.Add(deleteFeedItem);
+            }
+
+            treeViewItem.ContextMenu = menu;
+            e.Handled = true;
         }
 
         // OPMLファイルを読み込んでフィードを一括登録する

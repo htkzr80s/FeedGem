@@ -223,6 +223,53 @@ namespace FeedGem.Data
             }
         }
 
+        // 指定したフォルダ内に「実体のあるフィード」が存在するか確認する
+        public async Task<bool> IsFolderEmptyAsync(string folderPath)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // folder:// で始まる管理用データ以外の「本物のフィード」があるかカウントする
+            string query = "SELECT COUNT(*) FROM feeds WHERE folder_path = @path AND url NOT LIKE 'folder://%'";
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@path", folderPath);
+
+            var count = (long)(await command.ExecuteScalarAsync() ?? 0L);
+            return count == 0; // 0件なら空と判断
+        }
+
+        // フォルダとその配下の全データを削除する
+        public async Task DeleteFolderAsync(string folderPath)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // 明示的に SqliteTransaction にキャストして型不一致を防ぐ
+            using var transaction = (SqliteTransaction)connection.BeginTransaction();
+
+            try
+            {
+                // 1. 関連する記事データを削除
+                string deleteEntries = "DELETE FROM entries WHERE feed_id IN (SELECT id FROM feeds WHERE folder_path = @path)";
+                using var cmd1 = new SqliteCommand(deleteEntries, connection, transaction);
+                cmd1.Parameters.AddWithValue("@path", folderPath);
+                await cmd1.ExecuteNonQueryAsync();
+
+                // 2. フィードデータ（管理用ダミー含む）を削除
+                string deleteFeeds = "DELETE FROM feeds WHERE folder_path = @path";
+                using var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction);
+                cmd2.Parameters.AddWithValue("@path", folderPath);
+                await cmd2.ExecuteNonQueryAsync();
+
+                transaction.Commit();
+            }
+            catch
+            {
+                transaction.Rollback();
+                throw;
+            }
+        }
+
         // 各フィードごとに最新20件を除いた古い記事を一括削除する
         public async Task DeleteOldEntriesAsync()
         {
