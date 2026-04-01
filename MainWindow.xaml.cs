@@ -36,6 +36,7 @@ namespace FeedGem
         private readonly ContextMenuBuilder _menuBuilder;
         private readonly TreeDragDropHandler _dragHandler;
         private readonly FeedUpdateService _updateService;
+        private readonly OpmlService _opmlService;
         #endregion
 
         #region --- 初期設定系 ---
@@ -59,6 +60,7 @@ namespace FeedGem
             _updateService = new FeedUpdateService(_repository, _feedService);
             _discoveryService = new FeedDiscoveryService();
             _treeBuilder = new TreeBuilder(_repository);
+            _opmlService = new OpmlService(_repository);
 
             // 起動時にデータを画面に反映させる
             _ = LoadFeedsToTreeViewAsync();
@@ -71,6 +73,7 @@ namespace FeedGem
                 _repository,
                 _feedService,
                 _updateService,
+                _opmlService,
                 LoadFeedsToTreeViewAsync,
                 LogTextBlock
             );
@@ -256,15 +259,29 @@ namespace FeedGem
         // 右クリックメニューの動的生成と表示
         private void FeedTreeView_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
         {
-            var treeViewItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
+            var item = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
 
-            var menu = _menuBuilder.Build(treeViewItem);
-
-            if (treeViewItem != null)
+            if (item != null)
             {
-                treeViewItem.Focus();
-                treeViewItem.IsSelected = true;
-                treeViewItem.ContextMenu = menu;
+                // 順番重要
+                item.IsSelected = true;
+                item.Focus();
+            }
+            else
+            {
+                // 空白なら選択解除
+                foreach (var obj in FeedTreeView.Items)
+                {
+                    if (obj is TreeViewItem tvi)
+                        UnselectAll(tvi);
+                }
+            }
+
+            var menu = _menuBuilder.Build(item);
+
+            if (item != null)
+            {
+                item.ContextMenu = menu;
             }
             else
             {
@@ -283,36 +300,7 @@ namespace FeedGem
 
             try
             {
-                var doc = XDocument.Load(dialog.FileName);
-                var body = doc.Root?.Element("body");
-                if (body == null) return;
-
-                int count = 0;
-                // 再帰的にoutlineタグを解析してフォルダ構造を維持する
-                await ProcessOutlineElements(body.Elements("outline"), "/");
-
-                async Task ProcessOutlineElements(IEnumerable<XElement> elements, string currentPath)
-                {
-                    foreach (var outline in elements)
-                    {
-                        string title = outline.Attribute("text")?.Value ?? outline.Attribute("title")?.Value ?? "無題";
-                        string xmlUrl = outline.Attribute("xmlUrl")?.Value ?? "";
-
-                        if (!string.IsNullOrEmpty(xmlUrl))
-                        {
-                            // フィードURLがある場合は登録
-                            await _repository.AddFeedAsync(currentPath, title, xmlUrl);
-                            count++;
-                        }
-                        else if (outline.Elements("outline").Any())
-                        {
-                            // 子のoutlineがある場合はフォルダとして扱い、中身を解析
-                            string nextPath = currentPath == "/" ? $"/{title}" : $"{currentPath}/{title}";
-                            await ProcessOutlineElements(outline.Elements("outline"), nextPath);
-                        }
-                    }
-                }
-
+                int count = await _opmlService.ImportAsync(dialog.FileName);
                 LogTextBlock.Text = $"{count}件のフィードをインポートしました。";
                 await LoadFeedsToTreeViewAsync();
             }
@@ -330,41 +318,9 @@ namespace FeedGem
 
             try
             {
-                var feeds = await _repository.GetAllFeedsAsync();
+                var doc = await _opmlService.ExportAsync();
+                doc.Save(dialog.FileName);
 
-                // 階層構造を作るための下準備
-                var rootElement = new XElement("opml", new XAttribute("version", "2.0"),
-                                    new XElement("head", new XElement("title", "FeedGem Export")),
-                                    new XElement("body"));
-
-                var body = rootElement.Element("body");
-                if (body == null) return;
-
-                // フォルダごとにグループ化して出力
-                var folders = feeds.GroupBy(f => f.FolderPath);
-                foreach (var folder in folders)
-                {
-                    XContainer targetContainer = body;
-
-                    // ルート以外ならフォルダ用のoutlineタグを作る
-                    if (folder.Key != "/")
-                    {
-                        var folderNode = new XElement("outline", new XAttribute("text", folder.Key.TrimStart('/')));
-                        body.Add(folderNode);
-                        targetContainer = folderNode;
-                    }
-
-                    foreach (var f in folder)
-                    {
-                        targetContainer.Add(new XElement("outline",
-                            new XAttribute("text", f.Title),
-                            new XAttribute("title", f.Title),
-                            new XAttribute("type", "rss"),
-                            new XAttribute("xmlUrl", f.Url)));
-                    }
-                }
-
-                new XDocument(new XDeclaration("1.0", "utf-8", "yes"), rootElement).Save(dialog.FileName);
                 LogTextBlock.Text = "エクスポートが完了しました。";
             }
             catch (Exception ex)
@@ -376,58 +332,16 @@ namespace FeedGem
 
         #region --- UI生成ヘルパー ---
 
-        // フォルダ・フィード用のヘッダーUI（アイコン付き）を生成する
-        private static StackPanel CreateTreeItemHeader(string text, bool isFolder, string? url = null)
+        // TreeViewの選択を再帰的に解除
+        private static void UnselectAll(TreeViewItem item)
         {
-            var panel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(0, 2, 0, 2)
-            };
+            item.IsSelected = false;
 
-            if (isFolder)
+            foreach (var child in item.Items)
             {
-                var folderIcon = new TextBlock
-                {
-                    Text = "📁", // フォルダアイコン
-                    FontSize = 16,
-                    Margin = new Thickness(0, 0, 5, 0),
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                panel.Children.Add(folderIcon);
+                if (child is TreeViewItem childItem)
+                    UnselectAll(childItem);
             }
-            else
-            {
-                var image = new System.Windows.Controls.Image
-                {
-                    Width = 16,
-                    Height = 16,
-                    Margin = new Thickness(0, 0, 5, 0),
-                    VerticalAlignment = VerticalAlignment.Center
-                };
-                try
-                {
-                    // GoogleのFavicon APIを利用してアイコンを取得
-                    if (!string.IsNullOrEmpty(url))
-                    {
-                        var uri = new Uri(url);
-                        string faviconUrl = $"https://www.google.com/s2/favicons?domain={uri.Host}&sz=16";
-                        image.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri(faviconUrl));
-                    }
-                }
-                catch { /* URL解析失敗時などはアイコンなしで続行 */ }
-
-                panel.Children.Add(image);
-            }
-
-            var textBlock = new TextBlock
-            {
-                Text = text,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            panel.Children.Add(textBlock);
-
-            return panel;
         }
         #endregion
 

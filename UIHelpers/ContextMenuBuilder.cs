@@ -1,6 +1,7 @@
 ﻿using FeedGem.Data;
 using FeedGem.Services;
 using Microsoft.VisualBasic;
+using Microsoft.Win32;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Xml.Linq;
 
 namespace FeedGem.UIHelpers
 {
@@ -15,12 +17,14 @@ namespace FeedGem.UIHelpers
         FeedRepository repository,
         FeedService feedService,
         FeedUpdateService updateService,
+        OpmlService opmlService,
         Func<Task> reloadTree,
         TextBlock log)
     {
         private readonly FeedRepository _repository = repository;
         private readonly FeedService _feedService = feedService;
         private readonly FeedUpdateService _updateService = updateService;
+        private readonly OpmlService _opmlService = opmlService;
         private readonly Func<Task> _reloadTree = reloadTree;
         private readonly TextBlock _log = log;
 
@@ -35,8 +39,48 @@ namespace FeedGem.UIHelpers
             menu.Items.Add(refreshItem);
 
             var addFolderItem = new MenuItem { Header = "フォルダを作成..." };
-            addFolderItem.Click += async (s, e) => await AddFolder();
+            addFolderItem.Click += async (s, e) => await AddFolder(treeViewItem);
             menu.Items.Add(addFolderItem);
+
+            // --- OPMLインポート ---
+            var importOpmlItem = new MenuItem { Header = "OPMLをインポート..." };
+            importOpmlItem.Click += async (s, e) =>
+            {
+                var dialog = new OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
+                if (dialog.ShowDialog() != true) return;
+
+                try
+                {
+                    int count = await _opmlService.ImportAsync(dialog.FileName);
+                    _log.Text = $"{count}件のフィードをインポートしました。";
+                    await _reloadTree();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"インポート失敗: {ex.Message}");
+                }
+            };
+            menu.Items.Add(importOpmlItem);
+
+            // --- OPMLエクスポート ---
+            var exportOpmlItem = new MenuItem { Header = "OPMLをエクスポート..." };
+            exportOpmlItem.Click += async (s, e) =>
+            {
+                var dialog = new SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
+                if (dialog.ShowDialog() != true) return;
+
+                try
+                {
+                    var doc = await _opmlService.ExportAsync();
+                    doc.Save(dialog.FileName);
+                    _log.Text = "エクスポートが完了しました。";
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"エクスポート失敗: {ex.Message}");
+                }
+            };
+            menu.Items.Add(exportOpmlItem);
 
             if (treeViewItem != null)
             {
@@ -51,6 +95,22 @@ namespace FeedGem.UIHelpers
                     var deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
                     deleteFolderItem.Click += async (s, e) =>
                     {
+                        // フォルダが空かチェック
+                        bool isEmpty = await _repository.IsFolderEmptyAsync(folderPath);
+
+                        if (!isEmpty)
+                        {
+                            var result = MessageBox.Show(
+                                "このフォルダにはフィードが含まれています。すべて削除しますか？",
+                                "確認",
+                                MessageBoxButton.YesNo,
+                                MessageBoxImage.Warning
+                            );
+
+                            if (result != MessageBoxResult.Yes)
+                                return;
+                        }
+
                         await _feedService.DeleteFolderAsync(folderPath);
                         await _reloadTree();
                     };
@@ -86,12 +146,20 @@ namespace FeedGem.UIHelpers
         }
 
         // フォルダ追加
-        private async Task AddFolder()
+        private async Task AddFolder(TreeViewItem? target)
         {
             string name = Interaction.InputBox("フォルダ名", "作成", "");
             if (string.IsNullOrWhiteSpace(name)) return;
 
-            await _repository.AddFeedAsync("/", name, "folder://" + Guid.NewGuid());
+            string path = "/";
+
+            // フォルダ上で右クリックした場合
+            if (target?.Tag is string folderPath)
+            {
+                path = folderPath;
+            }
+
+            await _repository.AddFeedAsync(path, name, "folder://" + Guid.NewGuid());
             await _reloadTree();
         }
 

@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace FeedGem.Data
@@ -255,28 +256,53 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 明示的に SqliteTransaction にキャストして型不一致を防ぐ
             using var transaction = (SqliteTransaction)connection.BeginTransaction();
 
             try
             {
-                // 1. 関連する記事データを削除
-                string deleteEntries = "DELETE FROM entries WHERE feed_id IN (SELECT id FROM feeds WHERE folder_path = @path)";
-                using var cmd1 = new SqliteCommand(deleteEntries, connection, transaction);
-                cmd1.Parameters.AddWithValue("@path", folderPath);
-                await cmd1.ExecuteNonQueryAsync();
+                // 子フォルダパターン
+                string childPath = folderPath + "/%";
 
-                // 2. フィードデータ（管理用ダミー含む）を削除
-                string deleteFeeds = "DELETE FROM feeds WHERE folder_path = @path";
-                using var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction);
-                cmd2.Parameters.AddWithValue("@path", folderPath);
-                await cmd2.ExecuteNonQueryAsync();
+                // フォルダ名（例: /A/B → B）
+                string folderName = folderPath.TrimStart('/').Split('/').Last();
 
-                transaction.Commit();
+                // --- 1. 記事削除 ---
+                string deleteEntries = @"
+            DELETE FROM entries 
+            WHERE feed_id IN (
+                SELECT id FROM feeds 
+                WHERE folder_path = @path 
+                   OR folder_path LIKE @childPath
+            )";
+
+                using (var cmd1 = new SqliteCommand(deleteEntries, connection, transaction))
+                {
+                    cmd1.Parameters.AddWithValue("@path", folderPath);
+                    cmd1.Parameters.AddWithValue("@childPath", childPath);
+                    await cmd1.ExecuteNonQueryAsync();
+                }
+
+                // --- 2. フィード削除（フォルダ本体も含む） ---
+                string deleteFeeds = @"
+            DELETE FROM feeds 
+            WHERE 
+                folder_path = @path 
+                OR folder_path LIKE @childPath
+                OR (title = @folderName AND url LIKE 'folder://%')";
+
+                using (var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction))
+                {
+                    cmd2.Parameters.AddWithValue("@path", folderPath);
+                    cmd2.Parameters.AddWithValue("@childPath", childPath);
+                    cmd2.Parameters.AddWithValue("@folderName", folderName);
+                    await cmd2.ExecuteNonQueryAsync();
+                }
+
+                await transaction.CommitAsync();
             }
             catch
             {
-                transaction.Rollback();
+                await transaction.RollbackAsync();
                 throw;
             }
         }

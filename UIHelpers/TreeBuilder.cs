@@ -1,4 +1,5 @@
 ﻿using FeedGem.Data;
+using FeedGem.UIHelpers;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows.Controls;
@@ -31,7 +32,7 @@ namespace FeedGem.UIHelpers
                     {
                         node = new TreeViewItem
                         {
-                            Header = part,
+                            Header = TreeViewHeaderFactory.Create(part, true),
                             Tag = currentKey,
                             IsExpanded = true
                         };
@@ -47,13 +48,36 @@ namespace FeedGem.UIHelpers
                     parent = node;
                 }
 
-                // folder://はスキップ
+                // フォルダダミーの場合は「フォルダ生成だけしてスキップ」
                 if (feed.Url.StartsWith("folder://"))
+                {
+                    // フォルダ名自身もノードとして生成する必要がある
+                    string folderName = feed.Title;
+                    string folderPath = feed.FolderPath == "/" ? $"/{folderName}" : $"{feed.FolderPath}/{folderName}";
+
+                    if (!folderNodes.ContainsKey(folderPath))
+                    {
+                        var folderNode = new TreeViewItem
+                        {
+                            Header = TreeViewHeaderFactory.Create(folderName, true),
+                            Tag = folderPath,
+                            IsExpanded = true
+                        };
+
+                        if (parent == null)
+                            result.Add(folderNode);
+                        else
+                            parent.Items.Add(folderNode);
+
+                        folderNodes[folderPath] = folderNode;
+                    }
+
                     continue;
+                }
 
                 var feedNode = new TreeViewItem
                 {
-                    Header = feed.Title,
+                    Header = TreeViewHeaderFactory.Create(feed.Title, false, feed.Url),
                     Tag = feed.Id
                 };
 
