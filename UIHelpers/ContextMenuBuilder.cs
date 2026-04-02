@@ -1,7 +1,6 @@
 ﻿using FeedGem.Data;
 using FeedGem.Views;
 using FeedGem.Services;
-using Microsoft.VisualBasic;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -18,7 +17,9 @@ namespace FeedGem.UIHelpers
         FeedUpdateService updateService,
         Func<Task> reloadTree,
         TextBlock log,
-        Action updateTime)
+        Action updateTime,
+        Func<Task> importOpml,
+        Func<Task> exportOpml)
     {
         private readonly FeedRepository _repository = repository;
         private readonly FeedService _feedService = feedService;
@@ -26,6 +27,8 @@ namespace FeedGem.UIHelpers
         private readonly Func<Task> _reloadTree = reloadTree;
         private readonly TextBlock _log = log;
         private readonly Action _updateTime = updateTime;
+        private readonly Func<Task> _importOpml = importOpml;
+        private readonly Func<Task> _exportOpml = exportOpml;
 
         // ContextMenu生成
         public ContextMenu Build(TreeViewItem? treeViewItem)
@@ -39,6 +42,18 @@ namespace FeedGem.UIHelpers
             var addFolderItem = new MenuItem { Header = "フォルダを作成..." };
             addFolderItem.Click += async (s, e) => await AddFolder(treeViewItem);
             menu.Items.Add(addFolderItem);
+
+            menu.Items.Add(new Separator());
+
+            // OPMLインポート
+            var importOpmlItem = new MenuItem { Header = "OPMLをインポート..." };
+            importOpmlItem.Click += async (s, e) => await _importOpml();
+            menu.Items.Add(importOpmlItem);
+
+            // OPMLエクスポート
+            var exportOpmlItem = new MenuItem { Header = "OPMLをエクスポート..." };
+            exportOpmlItem.Click += async (s, e) => await _exportOpml();
+            menu.Items.Add(exportOpmlItem);
 
             if (treeViewItem != null)
             {
@@ -71,10 +86,18 @@ namespace FeedGem.UIHelpers
                     var deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
                     deleteFolderItem.Click += async (s, e) =>
                     {
+                        var result = MessageBox.Show(
+                            "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
+                            "確認",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning);
+
+                        if (result != MessageBoxResult.Yes)
+                            return;
+
                         await _feedService.DeleteFolderAsync(folderPath);
                         await _reloadTree();
                     };
-                    menu.Items.Add(deleteFolderItem);
                 }
                 else if (treeViewItem.Tag is long id)
                 {
@@ -160,8 +183,20 @@ namespace FeedGem.UIHelpers
                 var target = feeds.FirstOrDefault(f => f.Id == feedId);
                 if (target == null) return;
 
-                string name = Interaction.InputBox("新しい名前", "変更", target.Title);
-                if (string.IsNullOrWhiteSpace(name) || name == target.Title) return;
+                var dialog = new InputDialog("新しい名前", target.Title);
+
+                if (Application.Current?.MainWindow != null)
+                {
+                    dialog.Owner = Application.Current.MainWindow;
+                }
+
+                if (dialog.ShowDialog() != true)
+                    return;
+
+                string name = dialog.InputText;
+
+                if (string.IsNullOrWhiteSpace(name) || name == target.Title)
+                    return;
 
                 await _feedService.RenameFeedAsync(feedId, name);
                 await _reloadTree();

@@ -2,7 +2,6 @@
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.UIHelpers;
-using FeedGem.Views;
 using Microsoft.Win32;
 using System;
 using System.Collections.ObjectModel;
@@ -52,10 +51,10 @@ namespace FeedGem
             InitializeTray();
 
             // 画面が表示された後に実行する
-            this.Loaded += (s, e) =>
-            {
-                TestArea.Run();
-            };
+            // this.Loaded += (s, e) =>
+            // {
+            //     TestArea.Run();
+            // };
 
             SetupWindowIcon();
 
@@ -82,7 +81,9 @@ namespace FeedGem
                 _updateService,
                 LoadFeedsToTreeViewAsync,
                 LogTextBlock,
-                UpdateLastUpdateTime
+                UpdateLastUpdateTime,
+                ImportOpmlAsync,
+                ExportOpmlAsync
             );
 
             _dragHandler = new TreeDragDropHandler(
@@ -255,7 +256,7 @@ namespace FeedGem
             if (string.IsNullOrEmpty(url) || url == "URLを入力してEnter...") return;
 
             // フィードの探索
-            var candidates = await _discoveryService.DiscoverFeedsAsync(url);
+            var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
 
             bool added = false; // 追加が行われたかを判定するフラグ
 
@@ -263,10 +264,10 @@ namespace FeedGem
             {
                 // 1つだけ見つかった場合はそのまま登録
                 var selected = candidates[0];
-                await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+                long feedId = await _repository.AddFeedAsync("/", selected.Title, selected.Url);
 
                 // 登録直後に記事をダウンロードする
-                await _feedService.FetchAndSaveEntriesAsync(selected.Url);
+                await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
 
                 added = true;
             }
@@ -279,8 +280,8 @@ namespace FeedGem
                 {
                     foreach (var selected in selectionWindow.SelectedFeeds)
                     {
-                        await _repository.AddFeedAsync("/", selected.Title, selected.Url);
-                        await _feedService.FetchAndSaveEntriesAsync(selected.Url);
+                        long feedId = await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+                        await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
                     }
                     added = true;
                 }
@@ -378,8 +379,8 @@ namespace FeedGem
             e.Handled = true;
         }
 
-        // OPMLファイルを読み込んでフィードを一括登録する
-        private async void ImportOpml_Click(object sender, RoutedEventArgs e)
+        // OPMLインポート本体処理
+        private async Task ImportOpmlAsync()
         {
             var dialog = new OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
             if (dialog.ShowDialog() != true) return;
@@ -396,8 +397,13 @@ namespace FeedGem
             }
         }
 
-        // 現在のフィード一覧をOPML形式で書き出す
-        private async void ExportOpml_Click(object sender, RoutedEventArgs e)
+        private async void ImportOpml_Click(object sender, RoutedEventArgs e)
+        {
+            await ImportOpmlAsync();
+        }
+
+        // OPMLエクスポート本体処理
+        private async Task ExportOpmlAsync()
         {
             var dialog = new SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
             if (dialog.ShowDialog() != true) return;
@@ -413,6 +419,10 @@ namespace FeedGem
             {
                 MessageBox.Show($"エクスポート失敗: {ex.Message}");
             }
+        }
+        private async void ExportOpml_Click(object sender, RoutedEventArgs e)
+        {
+            await ExportOpmlAsync();
         }
 
         // 最終更新日時表示を更新
@@ -451,7 +461,7 @@ namespace FeedGem
         // ドラッグ中のマウスカーソル状態
         private void FeedTreeView_DragOver(object sender, DragEventArgs e)
         {
-            _dragHandler.OnDragOver(e);
+            TreeDragDropHandler.OnDragOver(e);
         }
 
         // ドロップされた時の処理

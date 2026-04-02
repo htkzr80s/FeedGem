@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Net.Http;
 using System.ServiceModel.Syndication;
 using System.Threading.Tasks;
 using System.Xml;
@@ -13,19 +14,32 @@ namespace FeedGem.Services
     public class FeedDiscoveryService
     {
         // フィード候補を探す
-        public async Task<List<FeedCandidate>> DiscoverFeedsAsync(string url)
+        public static async Task<List<FeedCandidate>> DiscoverFeedsAsync(string url)
         {
             var candidates = new List<FeedCandidate>();
 
-            // 1. まず入力されたURLそのものをフィードとして試す（SourceForge直入力などのケース）
+            // 1. 入力されたURLそのものをフィードとして試す
             try
             {
-                using var reader = XmlReader.Create(url);
+                using var http = new HttpClient();
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("FeedGem/1.0");
+
+                var stream = await http.GetStreamAsync(url);
+                using var reader = XmlReader.Create(stream);
+
                 var feed = SyndicationFeed.Load(reader);
-                candidates.Add(new FeedCandidate { Title = feed.Title.Text, Url = url });
-                return candidates;
+
+                if (feed != null)
+                {
+                    candidates.Add(new FeedCandidate
+                    {
+                        Title = feed.Title?.Text ?? "フィード",
+                        Url = url
+                    });
+                    return candidates;
+                }
             }
-            catch { /* 次のHTML解析へ */ }
+            catch { }
 
             // 2. HTML内からフィードURLを探す
             try
@@ -78,7 +92,10 @@ namespace FeedGem.Services
                 "/rss.xml",
                 "/atom.xml",
                 "/index.xml",
-                "/feeds/posts/default" // FC2やBlogger系
+                "/feeds/posts/default",
+                "/releases.atom",
+                "/commits.atom",
+                "/atom"
             };
 
             foreach (var path in commonPaths)
@@ -88,7 +105,12 @@ namespace FeedGem.Services
                     Uri baseUri = new(url);
                     Uri testUri = new(baseUri, path);
 
-                    using var reader = XmlReader.Create(testUri.AbsoluteUri);
+                    using var http = new HttpClient();
+                    http.DefaultRequestHeaders.UserAgent.ParseAdd("FeedGem/1.0");
+
+                    var stream = await http.GetStreamAsync(testUri.AbsoluteUri);
+                    using var reader = XmlReader.Create(stream);
+
                     var feed = SyndicationFeed.Load(reader);
 
                     if (feed != null && !candidates.Any(c => c.Url == testUri.AbsoluteUri))

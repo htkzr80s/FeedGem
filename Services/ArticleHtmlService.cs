@@ -16,6 +16,9 @@ namespace FeedGem.Services
                 ? "<p class='empty'>（プレビューを表示できる内容がありません。詳細はブラウザで確認してください。）</p>"
                 : content;
 
+            // 危険なscriptタグを無効化（最低限）
+            bodyContent = bodyContent.Replace("<script", "&lt;script");
+
             // モダンなデザインを適用したHTMLを構築
             var sb = new StringBuilder();
             sb.Append("<!DOCTYPE html><html lang='ja'><head><meta charset='utf-8'>");

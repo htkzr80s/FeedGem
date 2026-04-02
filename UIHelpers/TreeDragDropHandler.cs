@@ -43,7 +43,7 @@ namespace FeedGem.UIHelpers
         }
 
         // ドラッグ中
-        public void OnDragOver(DragEventArgs e)
+        public static void OnDragOver(DragEventArgs e)
         {
             e.Effects = DragDropEffects.Move;
             e.Handled = true;

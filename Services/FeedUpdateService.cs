@@ -20,7 +20,7 @@ namespace FeedGem.Services
             {
                 try
                 {
-                    await _feedService.FetchAndSaveEntriesAsync(feed.Url);
+                    await _feedService.FetchAndSaveEntriesAsync(feed.Id, feed.Url);
                 }
                 catch (Exception ex)
                 {
@@ -33,9 +33,9 @@ namespace FeedGem.Services
         }
 
         // 単体更新（将来UIから使える）
-        public async Task UpdateSingleAsync(string url)
+        public async Task UpdateSingleAsync(long feedId, string url)
         {
-            await _feedService.FetchAndSaveEntriesAsync(url);
+            await _feedService.FetchAndSaveEntriesAsync(feedId, url);
             await _repository.DeleteOldEntriesAsync();
         }
     }

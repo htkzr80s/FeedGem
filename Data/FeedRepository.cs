@@ -22,7 +22,7 @@ namespace FeedGem.Data
             string createTableQuery = @"
                 CREATE TABLE IF NOT EXISTS feeds (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    folder_path TEXT NOT NULL,
+                    folder_path TEXT NOT NULL DEFAULT '/',
                     title TEXT NOT NULL,
                     url TEXT UNIQUE NOT NULL
                 );
@@ -36,7 +36,6 @@ namespace FeedGem.Data
                     is_read INTEGER DEFAULT 0,
                     FOREIGN KEY(feed_id) REFERENCES feeds(id)
                 );";
-
             using var command = new SqliteCommand(createTableQuery, connection);
             command.ExecuteNonQuery();
 
@@ -45,6 +44,14 @@ namespace FeedGem.Data
             {
                 using var alterCommand = new SqliteCommand("ALTER TABLE feeds ADD COLUMN sort_order INTEGER DEFAULT 0;", connection);
                 alterCommand.ExecuteNonQuery();
+            }
+            catch { /* 無視 */ }
+
+            // ★ここを追加：古いデータベース用に folder_path カラムを強制追加する
+            try
+            {
+                using var alterFolderCommand = new SqliteCommand("ALTER TABLE feeds ADD COLUMN folder_path TEXT NOT NULL DEFAULT '/';", connection);
+                alterFolderCommand.ExecuteNonQuery();
             }
             catch { /* 無視 */ }
         }
@@ -104,28 +111,35 @@ namespace FeedGem.Data
         }
 
         // フィード情報・フォルダを登録する
-        public async Task AddFeedAsync(string folderPath, string title, string url)
+        public async Task<long> AddFeedAsync(string folder, string title, string url)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 重複チェックを厳密に行うためのクエリ
-            string insertQuery = "INSERT INTO feeds (folder_path, title, url) VALUES (@folderPath, @title, @url)";
-            using var command = new SqliteCommand(insertQuery, connection);
+            // 同じURLが既に登録されていないか事前に確認する
+            var checkCmd = connection.CreateCommand();
+            checkCmd.CommandText = "SELECT id FROM feeds WHERE url = $url LIMIT 1;"; // URLで検索
+            checkCmd.Parameters.AddWithValue("$url", url);
+            var existingId = await checkCmd.ExecuteScalarAsync();
 
-            command.Parameters.AddWithValue("@folderPath", folderPath); // フォルダなら通常は "/"
-            command.Parameters.AddWithValue("@title", title);          // フォルダ名
-            command.Parameters.AddWithValue("@url", url);            // 識別用の unique な文字列
+            // 既に存在する場合はそのIDを返して処理を抜ける（重複エラーを防止）
+            if (existingId != null)
+            {
+                return (long)existingId;
+            }
 
-            try
-            {
-                await command.ExecuteNonQueryAsync();
-            }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == 19) // 19 は Constraint 違反（重複など）
-            {
-                // すでに存在する場合は何もしない、あるいはログを出す
-                Debug.WriteLine("既に存在するURLのためスキップされました。");
-            }
+            // 重複がない場合のみ新規登録を実行する
+            var insertCmd = connection.CreateCommand();
+            insertCmd.CommandText = @"
+                INSERT INTO feeds (folder_path, title, url)
+                VALUES ($folder, $title, $url);
+                SELECT last_insert_rowid();"; // 挿入と同時に新しいIDを取得
+            insertCmd.Parameters.AddWithValue("$folder", folder);
+            insertCmd.Parameters.AddWithValue("$title", title);
+            insertCmd.Parameters.AddWithValue("$url", url);
+
+            var result = await insertCmd.ExecuteScalarAsync();
+            return (long)(result ?? 0);
         }
 
         // 記事データを保存する
