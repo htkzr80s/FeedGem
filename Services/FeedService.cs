@@ -71,114 +71,119 @@ namespace FeedGem.Services
         }
 
         // フィード取得＆記事保存
+        // フィード取得＆記事保存
         public async Task FetchAndSaveEntriesAsync(long feedId, string url)
         {
+            // 通信用のクライアント。UserAgentがないと拒否するサイトがあるため設定
             using var http = new HttpClient();
             http.DefaultRequestHeaders.UserAgent.ParseAdd("FeedGem/1.0");
 
             try
             {
-                var stream = await http.GetStreamAsync(url);
-                // --- まず通常（RSS2.0 / Atom）で読む ---
+                // FC2ブログの場合、URLに &all を自動付与して5件制限を回避する
+                string targetUrl = url;
+                if (url.Contains("blog.fc2.com") && !url.Contains("&all"))
+                {
+                    targetUrl = url.Contains("?") ? url + "&all" : url + "?xml&all";
+                }
+
+                var stream = await http.GetStreamAsync(targetUrl);
+
                 try
                 {
+                    // --- 通常の RSS 2.0 / Atom 形式の解析 ---
                     using var reader = XmlReader.Create(stream);
-                    var feed = SyndicationFeed.Load(reader);
+                    var feed = System.ServiceModel.Syndication.SyndicationFeed.Load(reader);
 
-                    if (feed == null) return;
-
-                    foreach (var item in feed.Items)
+                    if (feed != null)
                     {
-                        string title = item.Title?.Text ?? "";
-                        string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-
-                        // --- 本文取得（元のロジックをそのまま維持） ---
-                        string summary = "";
-                        var contentEncoded = item.ElementExtensions
-                            .FirstOrDefault(e =>
-                                e.OuterName == "encoded" ||
-                                e.OuterName == "content");
-                        if (contentEncoded != null)
+                        foreach (var item in feed.Items)
                         {
-                            try
+                            string title = item.Title?.Text ?? "";
+                            string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
+
+                            // 本文の抽出ロジック（元コードのロジックを完全再現）
+                            string summary = "";
+                            var contentEncoded = item.ElementExtensions.FirstOrDefault(e => e.OuterName == "encoded" || e.OuterName == "content");
+                            if (contentEncoded != null)
                             {
-                                using var extReader = contentEncoded.GetReader();
-                                var element = System.Xml.Linq.XElement.Load(extReader);
-                                summary = element.Value;
+                                try
+                                {
+                                    using var extReader = contentEncoded.GetReader();
+                                    var element = System.Xml.Linq.XElement.Load(extReader);
+                                    summary = element.Value;
+                                }
+                                catch { }
                             }
-                            catch { }
+                            if (string.IsNullOrEmpty(summary) && item.Content is System.ServiceModel.Syndication.TextSyndicationContent textContent)
+                            {
+                                summary = textContent.Text;
+                            }
+                            if (string.IsNullOrEmpty(summary))
+                            {
+                                summary = item.Summary?.Text ?? "";
+                            }
+                            if (string.IsNullOrEmpty(summary))
+                            {
+                                summary = $"<a href='{link}'>記事を開く</a>";
+                            }
+
+                            // 投稿日時の取得（日本時間に変換。ISO形式ではなく読みやすい形式へ）
+                            DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
+                                                   item.LastUpdatedTime != default ? item.LastUpdatedTime :
+                                                   DateTimeOffset.Now;
+                            string published = pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
+
+                            await _repository.SaveEntryAsync(feedId, title, link, summary, published);
                         }
-
-                        if (string.IsNullOrEmpty(summary) && item.Content is TextSyndicationContent textContent)
-                        {
-                            summary = textContent.Text;
-                        }
-
-                        if (string.IsNullOrEmpty(summary))
-                        {
-                            summary = item.Summary?.Text ?? "";
-                        }
-
-                        if (string.IsNullOrEmpty(summary))
-                        {
-                            summary = $"<a href='{link}'>記事を開く</a>";
-                        }
-
-                        // --- 日付処理の修正（ここを改善しました） ---
-                        DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
-                                               item.LastUpdatedTime != default ? item.LastUpdatedTime :
-                                               DateTimeOffset.Now;
-
-                        // 日本の時刻形式「yyyy/MM/dd HH:mm」に変換して保存
-                        string published = pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
-
-                        await _repository.SaveEntryAsync(
-                            feedId,
-                            title,
-                            link,
-                            summary,
-                            published
-                        );
+                        return;
                     }
-                    return;
                 }
                 catch
                 {
-                    // --- RDF（RSS1.0） fallback ---
-                    var stream2 = await http.GetStreamAsync(url);
+                    // --- FC2ブログ等の RSS 1.0 (RDF) 形式の解析 ---
+                    // ストリームを先頭に戻して再読み込み
+                    var stream2 = await http.GetStreamAsync(targetUrl);
                     var doc = System.Xml.Linq.XDocument.Load(stream2);
 
-                    var items = doc.Descendants()
-                        .Where(x => x.Name.LocalName == "item");
+                    // RSS 1.0 と Dublin Core (日付用) の名前空間を定義
+                    System.Xml.Linq.XNamespace ns = "http://purl.org/rss/1.0/";
+                    System.Xml.Linq.XNamespace dc = "http://purl.org/dc/elements/1.1/";
+
+                    // <item> タグを抽出
+                    var items = doc.Descendants(ns + "item");
                     foreach (var node in items)
                     {
-                        string title = node.Elements().FirstOrDefault(x => x.Name.LocalName == "title")?.Value ?? "";
-                        string link = node.Elements().FirstOrDefault(x => x.Name.LocalName == "link")?.Value ?? "";
-                        string desc = node.Elements().FirstOrDefault(x => x.Name.LocalName == "description")?.Value ?? "";
+                        string title = node.Element(ns + "title")?.Value ?? "";
+                        string link = node.Element(ns + "link")?.Value ?? "";
+                        string desc = node.Element(ns + "description")?.Value ?? "";
 
                         if (string.IsNullOrEmpty(desc))
                         {
                             desc = $"<a href='{link}'>記事を開く</a>";
                         }
 
-                        // RSS1.0でも日本時間で保存するように修正
-                        string published = DateTime.Now.ToString("yyyy/MM/dd HH:mm");
+                        // FC2の日付（dc:date）を解析。失敗した時だけ現在時刻にする
+                        string dateVal = node.Element(dc + "date")?.Value ?? "";
+                        string published;
+                        if (DateTimeOffset.TryParse(dateVal, out var parsedDate))
+                        {
+                            published = parsedDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
+                        }
+                        else
+                        {
+                            published = DateTime.Now.ToString("yyyy/MM/dd HH:mm");
+                        }
 
-                        await _repository.SaveEntryAsync(
-                            feedId,
-                            title,
-                            link,
-                            desc,
-                            published
-                        );
+                        await _repository.SaveEntryAsync(feedId, title, link, desc, published);
                     }
                 }
             }
             catch (Exception ex)
             {
+                // 通信エラーや解析エラーをデバッグ出力
                 Debug.WriteLine($"記事取得失敗: {ex.Message}");
             }
-            return;
         }
 
         // フィード名変更
