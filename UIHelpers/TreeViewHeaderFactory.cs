@@ -49,11 +49,19 @@ namespace FeedGem.UIHelpers
                 panel.Children.Add(image);
             }
 
-            panel.Children.Add(new TextBlock
+            var textBlock = new TextBlock
             {
                 Text = text,
                 VerticalAlignment = VerticalAlignment.Center
-            });
+            };
+
+            // 未読がある場合は強調（括弧付きなら判定）
+            if (text.Contains('('))
+            {
+                textBlock.FontWeight = FontWeights.Bold;
+            }
+
+            panel.Children.Add(textBlock);
 
             return panel;
         }

@@ -4,10 +4,8 @@ using FeedGem.Services;
 using FeedGem.UIHelpers;
 using Microsoft.Win32;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -15,7 +13,6 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Xml.Linq;
 
 namespace FeedGem
 {
@@ -107,6 +104,9 @@ namespace FeedGem
                 {
                     selectedArticle.IsRead = true;
                     await _repository.MarkAsReadAsync(selectedArticle.Url);
+
+                    // ツリーを再構築して未読数を即反映
+                    await LoadFeedsToTreeViewAsync();
                 }
 
                 // WebView2の準備ができているか確認
@@ -406,14 +406,14 @@ namespace FeedGem
         {
             FeedTreeView.Items.Clear();
 
-            var nodes = await _treeBuilder.BuildTreeAsync();
+            var nodes = await _treeBuilder.BuildTreeDataAsync();
 
             foreach (var node in nodes)
             {
+                var item = TreeViewItemFactory.Create(node);
                 // フィード選択イベント再設定
-                AttachSelectionHandler(node);
-
-                FeedTreeView.Items.Add(node);
+                AttachSelectionHandler(item);
+                FeedTreeView.Items.Add(item);
             }
         }
 

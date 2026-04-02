@@ -9,7 +9,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Xml.Linq;
 
 namespace FeedGem.UIHelpers
 {
@@ -33,7 +32,6 @@ namespace FeedGem.UIHelpers
         {
             var menu = new ContextMenu();
 
-            // --- 全体メニュー ---
             var refreshItem = new MenuItem { Header = "今すぐ更新" };
             refreshItem.Click += async (s, e) => await RefreshAll();
             menu.Items.Add(refreshItem);
@@ -42,49 +40,27 @@ namespace FeedGem.UIHelpers
             addFolderItem.Click += async (s, e) => await AddFolder(treeViewItem);
             menu.Items.Add(addFolderItem);
 
-            // --- OPMLインポート ---
-            var importOpmlItem = new MenuItem { Header = "OPMLをインポート..." };
-            importOpmlItem.Click += async (s, e) =>
-            {
-                var dialog = new OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
-                if (dialog.ShowDialog() != true) return;
-
-                try
-                {
-                    int count = await _opmlService.ImportAsync(dialog.FileName);
-                    _log.Text = $"{count}件のフィードをインポートしました。";
-                    await _reloadTree();
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"インポート失敗: {ex.Message}");
-                }
-            };
-            menu.Items.Add(importOpmlItem);
-
-            // --- OPMLエクスポート ---
-            var exportOpmlItem = new MenuItem { Header = "OPMLをエクスポート..." };
-            exportOpmlItem.Click += async (s, e) =>
-            {
-                var dialog = new SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
-                if (dialog.ShowDialog() != true) return;
-
-                try
-                {
-                    var doc = await _opmlService.ExportAsync();
-                    doc.Save(dialog.FileName);
-                    _log.Text = "エクスポートが完了しました。";
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"エクスポート失敗: {ex.Message}");
-                }
-            };
-            menu.Items.Add(exportOpmlItem);
-
             if (treeViewItem != null)
             {
                 menu.Items.Add(new Separator());
+
+                // すべて既読
+                if (treeViewItem.Tag is long feedId)
+                {
+                    var markAllReadItem = new MenuItem { Header = "すべて既読にする" };
+                    markAllReadItem.Click += async (s, e) =>
+                    {
+                        var entries = await _repository.GetEntriesByFeedIdAsync(feedId);
+
+                        foreach (var entry in entries)
+                        {
+                            await _repository.MarkAsReadAsync(entry.Url);
+                        }
+
+                        await _reloadTree();
+                    };
+                    menu.Items.Add(markAllReadItem);
+                }
 
                 var renameItem = new MenuItem { Header = "名前を変更..." };
                 renameItem.Click += async (s, e) => await Rename(treeViewItem);
@@ -95,31 +71,15 @@ namespace FeedGem.UIHelpers
                     var deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
                     deleteFolderItem.Click += async (s, e) =>
                     {
-                        // フォルダが空かチェック
-                        bool isEmpty = await _repository.IsFolderEmptyAsync(folderPath);
-
-                        if (!isEmpty)
-                        {
-                            var result = MessageBox.Show(
-                                "このフォルダにはフィードが含まれています。すべて削除しますか？",
-                                "確認",
-                                MessageBoxButton.YesNo,
-                                MessageBoxImage.Warning
-                            );
-
-                            if (result != MessageBoxResult.Yes)
-                                return;
-                        }
-
                         await _feedService.DeleteFolderAsync(folderPath);
                         await _reloadTree();
                     };
                     menu.Items.Add(deleteFolderItem);
                 }
-                else if (treeViewItem.Tag is long feedId)
+                else if (treeViewItem.Tag is long id)
                 {
                     var deleteFeedItem = new MenuItem { Header = "このフィードを削除", Foreground = Brushes.Red };
-                    deleteFeedItem.Click += async (s, e) => await DeleteFeed(feedId);
+                    deleteFeedItem.Click += async (s, e) => await DeleteFeed(id);
                     menu.Items.Add(deleteFeedItem);
                 }
             }
