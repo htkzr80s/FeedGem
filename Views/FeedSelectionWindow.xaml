@@ -1,4 +1,4 @@
-﻿<Window x:Class="FeedGem.FeedSelectionWindow"
+﻿<Window x:Class="FeedGem.Views.FeedSelectionWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="フィードの選択" Height="300" Width="400" WindowStartupLocation="CenterOwner">

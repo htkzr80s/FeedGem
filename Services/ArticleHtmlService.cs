@@ -1,24 +1,15 @@
-﻿using FeedGem.Models;
-using HtmlAgilityPack;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Linq;
-using System.Net.Http;
-using System.ServiceModel.Syndication;
+﻿using System.Net.Http;
 using System.Text;
-using System.Threading.Tasks;
-using System.Xml;
 
-namespace FeedGem
+
+namespace FeedGem.Services
 {
-    // フィード関連の複雑なロジックを管理するクラス
-    public static class FeedHelper
+    public static class ArticleHtmlService
     {
         private static readonly HttpClient _httpClient = new();
 
         // 記事の内容をプレビュー用に装飾するHTMLを生成する
-        public static string GeneratePreviewHtml(string title, string content)
+        public static string BuildPreviewHtml(string title, string content)
         {
             // 内容が空の場合のデフォルトメッセージ
             string bodyContent = string.IsNullOrWhiteSpace(content)

@@ -5,13 +5,23 @@
 		<TargetFramework>net10.0-windows</TargetFramework>
 		<Nullable>enable</Nullable>
 		<UseWPF>true</UseWPF>
+		<UseWindowsForms>true</UseWindowsForms>
 		<ApplicationIcon>app.ico</ApplicationIcon>
 	</PropertyGroup>
 
 	<ItemGroup>
-		<EmbeddedResource Include="app.ico">
+	  <None Remove="app_unread.ico" />
+	  <None Remove="app_unread.ico.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="app.ico">
 			<LogicalName>FeedGem.app.ico</LogicalName>
-		</EmbeddedResource>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
+		<Content Include="app_unread.ico">
+		  <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</Content>
 	</ItemGroup>
 
 	<ItemGroup>
@@ -20,5 +30,4 @@
 		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3856.49" />
 		<PackageReference Include="System.ServiceModel.Syndication" Version="10.0.5" />
 	</ItemGroup>
-	
 </Project>

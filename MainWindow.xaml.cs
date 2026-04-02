@@ -2,6 +2,7 @@
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.UIHelpers;
+using FeedGem.Views;
 using Microsoft.Win32;
 using System;
 using System.Collections.ObjectModel;
@@ -33,13 +34,22 @@ namespace FeedGem
         private readonly ContextMenuBuilder _menuBuilder;
         private readonly TreeDragDropHandler _dragHandler;
         private readonly FeedUpdateService _updateService;
+
         private readonly OpmlService _opmlService;
+        // --- トレイ関連 ---
+        private System.Windows.Forms.NotifyIcon? _notifyIcon;
+        private readonly bool _isExit = false;
+        // 通常アイコン / 未読アイコン
+        private System.Drawing.Icon? _normalIcon;
+        private System.Drawing.Icon? _unreadIcon;
         #endregion
 
         #region --- 初期設定系 ---
         public MainWindow()
         {
             InitializeComponent();
+            // --- トレイ初期化 ---
+            InitializeTray();
 
             // 画面が表示された後に実行する
             this.Loaded += (s, e) =>
@@ -70,15 +80,20 @@ namespace FeedGem
                 _repository,
                 _feedService,
                 _updateService,
-                _opmlService,
                 LoadFeedsToTreeViewAsync,
-                LogTextBlock
+                LogTextBlock,
+                UpdateLastUpdateTime
             );
 
             _dragHandler = new TreeDragDropHandler(
                 _repository,
                 LoadFeedsToTreeViewAsync
             );
+
+            this.StateChanged += MainWindow_StateChanged;
+
+            _ = UpdateTrayIconAsync();
+            UpdateLastUpdateTime();
         }
 
         // 高DPIアイコンをウィンドウに適用する
@@ -94,6 +109,75 @@ namespace FeedGem
 
         #region --- UIイベントハンドラ ---
 
+        // トレイアイコン初期化
+        private void InitializeTray()
+        {
+            _normalIcon = new System.Drawing.Icon("app.ico");
+            _unreadIcon = new System.Drawing.Icon("app_unread.ico");
+
+            _notifyIcon = new System.Windows.Forms.NotifyIcon
+            {
+                Icon = _normalIcon,
+                Visible = true,
+                Text = "FeedGem"
+            };
+
+            // シングルクリックで復帰
+            _notifyIcon.MouseClick += (s, e) =>
+            {
+                if (e.Button == System.Windows.Forms.MouseButtons.Left)
+                {
+                    RestoreWindow();
+                }
+            };
+        }
+
+        // 最小化時にトレイへ
+        private void MainWindow_StateChanged(object? sender, EventArgs e)
+        {
+            if (this.WindowState == WindowState.Minimized)
+            {
+                this.Hide(); // タスクバーから消える
+            }
+        }
+
+        // ウィンドウ復帰
+        private void RestoreWindow()
+        {
+            this.Show();
+            this.WindowState = WindowState.Normal;
+            this.Activate();
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (!_isExit)
+            {
+                e.Cancel = true;
+                this.Hide();
+            }
+            else
+            {
+                _notifyIcon?.Dispose();
+            }
+        }
+
+        // 未読アイコン更新
+        private async Task UpdateTrayIconAsync()
+        {
+            var feeds = await _repository.GetAllFeedsAsync();
+
+            int totalUnread = 0;
+
+            foreach (var f in feeds)
+            {
+                totalUnread += await _repository.GetUnreadCountAsync(f.Id);
+            }
+
+            _notifyIcon?.Icon = totalUnread > 0 ? _unreadIcon : _normalIcon;
+        }
+
+
         // 記事リストの選択が変更された際の処理
         private async void ArticleListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -105,6 +189,8 @@ namespace FeedGem
                     selectedArticle.IsRead = true;
                     await _repository.MarkAsReadAsync(selectedArticle.Url);
 
+                    await UpdateTrayIconAsync();
+
                     // ツリーを再構築して未読数を即反映
                     await LoadFeedsToTreeViewAsync();
                 }
@@ -113,7 +199,7 @@ namespace FeedGem
                 await PreviewBrowser.EnsureCoreWebView2Async(null);
 
                 // ヘルパークラスを使ってHTMLを生成する
-                string html = FeedHelper.GeneratePreviewHtml(selectedArticle.Title, selectedArticle.Summary);
+                string html = ArticleHtmlService.BuildPreviewHtml(selectedArticle.Title, selectedArticle.Summary);
 
                 // プレビュー表示
                 PreviewBrowser.NavigateToString(html);
@@ -187,7 +273,7 @@ namespace FeedGem
             else if (candidates.Count > 1)
             {
                 // 複数見つかった場合は選択ウィンドウを表示
-                var selectionWindow = new FeedSelectionWindow(candidates) { Owner = this };
+                var selectionWindow = new Views.FeedSelectionWindow(candidates) { Owner = this };
 
                 if (selectionWindow.ShowDialog() == true)
                 {
@@ -328,9 +414,12 @@ namespace FeedGem
                 MessageBox.Show($"エクスポート失敗: {ex.Message}");
             }
         }
-        #endregion
 
-        #region --- UI生成ヘルパー ---
+        // 最終更新日時表示を更新
+        private void UpdateLastUpdateTime()
+        {
+            LastUpdateTextBlock.Text = $"最終更新: {DateTime.Now:yyyy/MM/dd HH:mm}";
+        }
 
         // TreeViewの選択を再帰的に解除
         private static void UnselectAll(TreeViewItem item)
@@ -395,6 +484,8 @@ namespace FeedGem
             while (await timer.WaitForNextTickAsync())
             {
                 await _updateService.UpdateAllAsync();
+                await UpdateTrayIconAsync();
+                UpdateLastUpdateTime();
             }
         }
         #endregion
@@ -415,6 +506,9 @@ namespace FeedGem
                 AttachSelectionHandler(item);
                 FeedTreeView.Items.Add(item);
             }
+
+            // トレイアイコン更新
+            await UpdateTrayIconAsync();
         }
 
         // TreeViewItemに選択イベントを再帰的に付与する

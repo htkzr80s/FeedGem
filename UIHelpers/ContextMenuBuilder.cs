@@ -1,7 +1,7 @@
 ﻿using FeedGem.Data;
+using FeedGem.Views;
 using FeedGem.Services;
 using Microsoft.VisualBasic;
-using Microsoft.Win32;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -16,16 +16,16 @@ namespace FeedGem.UIHelpers
         FeedRepository repository,
         FeedService feedService,
         FeedUpdateService updateService,
-        OpmlService opmlService,
         Func<Task> reloadTree,
-        TextBlock log)
+        TextBlock log,
+        Action updateTime)
     {
         private readonly FeedRepository _repository = repository;
         private readonly FeedService _feedService = feedService;
         private readonly FeedUpdateService _updateService = updateService;
-        private readonly OpmlService _opmlService = opmlService;
         private readonly Func<Task> _reloadTree = reloadTree;
         private readonly TextBlock _log = log;
+        private readonly Action _updateTime = updateTime;
 
         // ContextMenu生成
         public ContextMenu Build(TreeViewItem? treeViewItem)
@@ -97,6 +97,7 @@ namespace FeedGem.UIHelpers
             {
                 await _updateService.UpdateAllAsync();
                 await _reloadTree();
+                _updateTime();
                 _log.Text = "更新が完了しました。";
             }
             finally
@@ -108,7 +109,15 @@ namespace FeedGem.UIHelpers
         // フォルダ追加
         private async Task AddFolder(TreeViewItem? target)
         {
-            string name = Interaction.InputBox("フォルダ名", "作成", "");
+            var dialog = new InputDialog("フォルダ名");
+            if (Application.Current?.MainWindow != null)
+            {
+                dialog.Owner = Application.Current.MainWindow;
+            }
+
+            if (dialog.ShowDialog() != true) return;
+
+            string name = dialog.InputText;
             if (string.IsNullOrWhiteSpace(name)) return;
 
             string path = "/";
@@ -129,7 +138,16 @@ namespace FeedGem.UIHelpers
             if (item.Tag is string folderPath)
             {
                 string current = folderPath.TrimStart('/');
-                string name = Interaction.InputBox("新しい名前", "変更", current);
+                var dialog = new InputDialog("新しい名前", current);
+
+                if (Application.Current?.MainWindow != null)
+                {
+                    dialog.Owner = Application.Current.MainWindow;
+                }
+
+                if (dialog.ShowDialog() != true) return;
+
+                string name = dialog.InputText;
 
                 if (string.IsNullOrWhiteSpace(name) || name == current) return;
 

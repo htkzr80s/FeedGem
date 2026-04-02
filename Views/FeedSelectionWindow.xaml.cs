@@ -3,14 +3,14 @@ using System.Linq;
 using System.Windows;
 using FeedGem.Models;
 
-namespace FeedGem
+namespace FeedGem.Views
 {
     public partial class FeedSelectionWindow : Window
     {
         // 選択されたフィードのリストを取得するためのプロパティ
         public List<FeedCandidate> SelectedFeeds =>
             (CandidateListBox.ItemsSource as List<FeedCandidate>)?
-            .Where(f => f.IsSelected).ToList() ?? new List<FeedCandidate>();
+            .Where(f => f.IsSelected).ToList() ?? [];
 
         // コンストラクタ
         public FeedSelectionWindow(List<FeedCandidate> candidates)
