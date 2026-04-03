@@ -98,6 +98,8 @@ namespace FeedGem.UIHelpers
                         await _feedService.DeleteFolderAsync(folderPath);
                         await _reloadTree();
                     };
+                    menu.Items.Add(deleteFolderItem);
+
                 }
                 else if (treeViewItem.Tag is long id)
                 {

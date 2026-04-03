@@ -1,8 +1,6 @@
 ﻿using FeedGem.Data;
-using FeedGem.Models;
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.ServiceModel.Syndication;
@@ -71,7 +69,6 @@ namespace FeedGem.Services
         }
 
         // フィード取得＆記事保存
-        // フィード取得＆記事保存
         public async Task FetchAndSaveEntriesAsync(long feedId, string url)
         {
             // 通信用のクライアント。UserAgentがないと拒否するサイトがあるため設定
@@ -80,11 +77,20 @@ namespace FeedGem.Services
 
             try
             {
-                // FC2ブログの場合、URLに &all を自動付与して5件制限を回避する
+                // FC2ブログ対策：必ず ?xml&all を付与する
                 string targetUrl = url;
-                if (url.Contains("blog.fc2.com") && !url.Contains("&all"))
+
+                if (url.Contains("blog.fc2.com"))
                 {
-                    targetUrl = url.Contains("?") ? url + "&all" : url + "?xml&all";
+                    if (!url.Contains("?xml"))
+                    {
+                        targetUrl = url.TrimEnd('/') + "/?xml";
+                    }
+
+                    if (!targetUrl.Contains("&all"))
+                    {
+                        targetUrl += "&all";
+                    }
                 }
 
                 var stream = await http.GetStreamAsync(targetUrl);
