@@ -10,8 +10,8 @@ namespace FeedGem
     public partial class App : Application
     {
         // Shell32.dllの関数をインポート
-        [DllImport("shell32.dll", SetLastError = true)]
-        private static extern void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
+        [LibraryImport("shell32.dll", SetLastError = true)]
+        private static partial void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
 
         // アプリケーション起動時の処理
         protected override void OnStartup(StartupEventArgs e)

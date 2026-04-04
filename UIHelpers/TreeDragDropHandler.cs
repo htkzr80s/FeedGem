@@ -1,4 +1,5 @@
 ﻿using FeedGem.Data;
+using FeedGem.Models;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -52,9 +53,10 @@ namespace FeedGem.UIHelpers
         // ドロップ処理
         public async Task OnDrop(object sender, DragEventArgs e)
         {
-            if (_dragSourceItem == null || _dragSourceItem.Tag is not long sourceId)
+            if (_dragSourceItem?.Tag is not TreeTag sourceTag || sourceTag.FeedId == null)
                 return;
 
+            long sourceId = sourceTag.FeedId.Value;
             var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
             if (targetItem == _dragSourceItem) return;
 
@@ -62,18 +64,22 @@ namespace FeedGem.UIHelpers
             int targetIndex = -1;
             ItemsControl targetParent = (ItemsControl)sender;
 
-            if (targetItem != null)
+            if (targetItem?.Tag is TreeTag targetTag)
             {
-                if (targetItem.Tag is string folderPath)
+                if (targetTag.Type == TreeNodeType.Folder && targetTag.FolderPath != null)
                 {
-                    newFolderPath = folderPath;
+                    newFolderPath = targetTag.FolderPath;
                     targetParent = targetItem;
                     targetIndex = targetItem.Items.Count;
                 }
-                else if (targetItem.Tag is long)
+                else if (targetTag.Type == TreeNodeType.Feed)
                 {
                     var parentItem = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(targetItem));
-                    newFolderPath = parentItem?.Tag as string ?? "/";
+                    if (parentItem?.Tag is TreeTag parentTag && parentTag.FolderPath != null)
+                    {
+                        newFolderPath = parentTag.FolderPath;
+                    }
+
                     targetParent = parentItem ?? (ItemsControl)sender;
                     targetIndex = targetParent.Items.IndexOf(targetItem);
                 }

@@ -21,8 +21,7 @@ namespace FeedGem.Services
             // 1. 入力されたURLそのものをフィードとして試す
             try
             {
-                using var http = new HttpClient();
-                http.DefaultRequestHeaders.UserAgent.ParseAdd("FeedGem/1.0");
+                var http = HttpClientProvider.Client;
 
                 var stream = await http.GetStreamAsync(url);
                 using var reader = XmlReader.Create(stream);
@@ -105,8 +104,7 @@ namespace FeedGem.Services
                     Uri baseUri = new(url);
                     Uri testUri = new(baseUri, path);
 
-                    using var http = new HttpClient();
-                    http.DefaultRequestHeaders.UserAgent.ParseAdd("FeedGem/1.0");
+                    var http = HttpClientProvider.Client;
 
                     var stream = await http.GetStreamAsync(testUri.AbsoluteUri);
                     using var reader = XmlReader.Create(stream);

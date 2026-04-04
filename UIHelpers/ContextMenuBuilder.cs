@@ -1,6 +1,7 @@
 ﻿using FeedGem.Data;
-using FeedGem.Views;
+using FeedGem.Models;
 using FeedGem.Services;
+using FeedGem.Views;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -55,34 +56,38 @@ namespace FeedGem.UIHelpers
             exportOpmlItem.Click += async (s, e) => await _exportOpml();
             menu.Items.Add(exportOpmlItem);
 
-            if (treeViewItem != null)
+            if (treeViewItem?.Tag is TreeTag tag)
             {
                 menu.Items.Add(new Separator());
 
-                // すべて既読
-                if (treeViewItem.Tag is long feedId)
+                if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)
                 {
+                    long feedId = tag.FeedId.Value;
+
                     var markAllReadItem = new MenuItem { Header = "すべて既読にする" };
                     markAllReadItem.Click += async (s, e) =>
                     {
-                        var entries = await _repository.GetEntriesByFeedIdAsync(feedId);
-
-                        foreach (var entry in entries)
-                        {
-                            await _repository.MarkAsReadAsync(entry.Url);
-                        }
-
+                        await _feedService.MarkAllAsReadAsync(feedId);
                         await _reloadTree();
                     };
                     menu.Items.Add(markAllReadItem);
+
+                    var renameItem = new MenuItem { Header = "名前を変更..." };
+                    renameItem.Click += async (s, e) => await Rename(treeViewItem);
+                    menu.Items.Add(renameItem);
+
+                    var deleteFeedItem = new MenuItem { Header = "このフィードを削除", Foreground = Brushes.Red };
+                    deleteFeedItem.Click += async (s, e) => await DeleteFeed(feedId);
+                    menu.Items.Add(deleteFeedItem);
                 }
-
-                var renameItem = new MenuItem { Header = "名前を変更..." };
-                renameItem.Click += async (s, e) => await Rename(treeViewItem);
-                menu.Items.Add(renameItem);
-
-                if (treeViewItem.Tag is string folderPath)
+                else if (tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
                 {
+                    string folderPath = tag.FolderPath;
+
+                    var renameItem = new MenuItem { Header = "名前を変更..." };
+                    renameItem.Click += async (s, e) => await Rename(treeViewItem);
+                    menu.Items.Add(renameItem);
+
                     var deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
                     deleteFolderItem.Click += async (s, e) =>
                     {
@@ -99,16 +104,8 @@ namespace FeedGem.UIHelpers
                         await _reloadTree();
                     };
                     menu.Items.Add(deleteFolderItem);
-
-                }
-                else if (treeViewItem.Tag is long id)
-                {
-                    var deleteFeedItem = new MenuItem { Header = "このフィードを削除", Foreground = Brushes.Red };
-                    deleteFeedItem.Click += async (s, e) => await DeleteFeed(id);
-                    menu.Items.Add(deleteFeedItem);
                 }
             }
-
             return menu;
         }
 
@@ -160,45 +157,41 @@ namespace FeedGem.UIHelpers
         // 名前変更
         private async Task Rename(TreeViewItem item)
         {
-            if (item.Tag is string folderPath)
-            {
-                string current = folderPath.TrimStart('/');
-                var dialog = new InputDialog("新しい名前", current);
+            if (item.Tag is not TreeTag tag) return;
 
+            if (tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
+            {
+                string folderPath = tag.FolderPath;
+                string current = folderPath.TrimStart('/');
+
+                var dialog = new InputDialog("新しい名前", current);
                 if (Application.Current?.MainWindow != null)
-                {
                     dialog.Owner = Application.Current.MainWindow;
-                }
 
                 if (dialog.ShowDialog() != true) return;
 
                 string name = dialog.InputText;
-
                 if (string.IsNullOrWhiteSpace(name) || name == current) return;
 
                 await _feedService.RenameFolderAsync(folderPath, name);
                 await _reloadTree();
             }
-            else if (item.Tag is long feedId)
+            else if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)
             {
+                long feedId = tag.FeedId.Value;
+
                 var feeds = await _repository.GetAllFeedsAsync();
                 var target = feeds.FirstOrDefault(f => f.Id == feedId);
                 if (target == null) return;
 
                 var dialog = new InputDialog("新しい名前", target.Title);
-
                 if (Application.Current?.MainWindow != null)
-                {
                     dialog.Owner = Application.Current.MainWindow;
-                }
 
-                if (dialog.ShowDialog() != true)
-                    return;
+                if (dialog.ShowDialog() != true) return;
 
                 string name = dialog.InputText;
-
-                if (string.IsNullOrWhiteSpace(name) || name == target.Title)
-                    return;
+                if (string.IsNullOrWhiteSpace(name) || name == target.Title) return;
 
                 await _feedService.RenameFeedAsync(feedId, name);
                 await _reloadTree();

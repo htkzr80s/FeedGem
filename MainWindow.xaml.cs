@@ -482,8 +482,6 @@ namespace FeedGem
         }
         #endregion
 
-        #region --- データ取得・巡回系 ---
-
         // バックグラウンドでの定期巡回タスクを開始する
         private async Task StartBackgroundPollingAsync()
         {
@@ -498,9 +496,6 @@ namespace FeedGem
                 UpdateLastUpdateTime();
             }
         }
-        #endregion
-
-        #region --- DBアクセス ---
 
         // フォルダ階層を考慮してフィード一覧を表示する
         private async Task LoadFeedsToTreeViewAsync()
@@ -524,8 +519,10 @@ namespace FeedGem
         // TreeViewItemに選択イベントを再帰的に付与する
         private void AttachSelectionHandler(TreeViewItem item)
         {
-            if (item.Tag is long feedId)
+            if (item.Tag is TreeTag tag && tag.FeedId != null)
             {
+                long feedId = tag.FeedId.Value;
+
                 item.Selected += async (s, e) =>
                 {
                     e.Handled = true;
@@ -553,6 +550,5 @@ namespace FeedGem
             }
             ArticleListView.ItemsSource = currentArticles;
         }
-        #endregion
     }
 }

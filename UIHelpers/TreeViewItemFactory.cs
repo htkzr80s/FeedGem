@@ -22,7 +22,17 @@ namespace FeedGem.UIHelpers
             var item = new TreeViewItem
             {
                 Header = header,
-                Tag = node.FeedId ?? (object)node.Path,
+                Tag = node.FeedId != null
+                    ? new TreeTag
+                    {
+                        Type = TreeNodeType.Feed,
+                        FeedId = node.FeedId
+                    }
+                    : new TreeTag
+                    {
+                        Type = TreeNodeType.Folder,
+                        FolderPath = node.Path
+                    },
                 IsExpanded = true
             };
 

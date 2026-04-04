@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.ServiceModel.Syndication;
 using System.Threading.Tasks;
 using System.Xml;
+using static System.Net.WebRequestMethods;
 
 namespace FeedGem.Services
 {
@@ -23,8 +24,14 @@ namespace FeedGem.Services
             {
                 try
                 {
-                    // インターネットからフィードをダウンロード
-                    using var reader = XmlReader.Create(feed.Url);
+                    // HttpClient共有インスタンス取得
+                    var http = HttpClientProvider.Client;
+
+                    // フィードをストリームとして取得
+                    var stream = await http.GetStreamAsync(feed.Url);
+
+                    // XMLとして読み込み
+                    using var reader = XmlReader.Create(stream);
                     var rssData = SyndicationFeed.Load(reader);
 
                     if (rssData == null) continue;
@@ -71,14 +78,12 @@ namespace FeedGem.Services
         // フィード取得＆記事保存
         public async Task FetchAndSaveEntriesAsync(long feedId, string url)
         {
-            // 通信用のクライアント。UserAgentがないと拒否するサイトがあるため設定
-            using var http = new HttpClient();
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("FeedGem/1.0");
+            var http = HttpClientProvider.Client;
 
             try
             {
-                // FC2ブログ対策：必ず ?xml&all を付与する
-                string targetUrl = url;
+                // サイトごとのURL補正
+                string targetUrl = SiteUrlHelper.Normalize(url);
 
                 if (url.Contains("blog.fc2.com"))
                 {
@@ -189,6 +194,17 @@ namespace FeedGem.Services
             {
                 // 通信エラーや解析エラーをデバッグ出力
                 Debug.WriteLine($"記事取得失敗: {ex.Message}");
+            }
+        }
+
+        // 指定フィードをすべて既読にする
+        public async Task MarkAllAsReadAsync(long feedId)
+        {
+            var entries = await _repository.GetEntriesByFeedIdAsync(feedId);
+
+            foreach (var entry in entries)
+            {
+                await _repository.MarkAsReadAsync(entry.Url);
             }
         }
 
