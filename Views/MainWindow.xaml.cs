@@ -272,54 +272,67 @@ namespace FeedGem.Views
         private async void PerformUrlSubscribe()
         {
             string url = SearchBox.Text.Trim();
+            // 入力が空、または初期テキストの場合は処理を中断
             if (string.IsNullOrEmpty(url) || url == "URLを入力してEnter...") return;
 
-            // フィードの探索
-            var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
-            LogTextBlock.Text = "フィードを探索中...";
-
-            bool added = false; // 追加が行われたかを判定するフラグ
-
-            if (candidates.Count == 1)
+            try
             {
-                // 1つだけ見つかった場合はそのまま登録
-                var selected = candidates[0];
-                long feedId = await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+                // アプリケーション全体のカーソルを待機状態（砂時計）に変更
+                Mouse.OverrideCursor = Input.Cursors.Wait;
+                LogTextBlock.Text = "フィードを探索中...";
 
-                // 登録直後に記事をダウンロードする
-                await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
+                // フィードの探索
+                var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
+                bool added = false; // 追加が行われたかを判定するフラグ
 
-                added = true;
-                LogTextBlock.Text = "フィードを追加しました。";
-            }
-            else if (candidates.Count > 1)
-            {
-                // 複数見つかった場合は選択ウィンドウを表示
-                var selectionWindow = new Views.FeedSelectionWindow(candidates) { Owner = this };
-
-                if (selectionWindow.ShowDialog() == true)
+                if (candidates.Count == 1)
                 {
-                    foreach (var selected in selectionWindow.SelectedFeeds)
-                    {
-                        long feedId = await _repository.AddFeedAsync("/", selected.Title, selected.Url);
-                        await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
-                    }
+                    // 1つだけ見つかった場合はそのまま登録
+                    var selected = candidates[0];
+                    long feedId = await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+
+                    // 登録直後に記事をダウンロードする
+                    await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
+
                     added = true;
+                    LogTextBlock.Text = "フィードを追加しました。";
+                }
+                else if (candidates.Count > 1)
+                {
+                    // 複数候補がある場合は一度カーソルを戻してユーザー選択を待つ
+                    Mouse.OverrideCursor = null;
+                    var selectionWindow = new Views.FeedSelectionWindow(candidates) { Owner = this };
+
+                    if (selectionWindow.ShowDialog() == true)
+                    {
+                        Mouse.OverrideCursor = Input.Cursors.Wait;
+                        foreach (var selected in selectionWindow.SelectedFeeds)
+                        {
+                            long feedId = await _repository.AddFeedAsync("/", selected.Title, selected.Url);
+                            await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
+                        }
+                        added = true;
+                        LogTextBlock.Text = "フィードを追加しました。";
+                    }
+                }
+                // 探索に失敗した場合などのケア
+                else
+                {
+                    MsgBox.Show("フィードが見つかりません。URLが正しいか確認してください。", "お知らせ");
+                    LogTextBlock.Text = "フィードが見つかりませんでした。";
+                }
+
+                if (added)
+                {
+                    // 購読完了時のUI更新
+                    SearchBox.Text = "URLを入力してEnter...";
+                    await LoadFeedsToTreeViewAsync();
                 }
             }
-            // 探索に失敗した場合などのケア
-            else
+            finally
             {
-                MsgBox.Show("フィードが見つかりません。URLが正しいか確認してください。", "お知らせ");
-                LogTextBlock.Text = "フィードが見つかりませんでした。";
-            }
-
-            if (added)
-            {
-                // 修正箇所2：購読完了したら入力バーを空にする
-                SearchBox.Text = "";
-                // ツリービューを更新
-                await LoadFeedsToTreeViewAsync();
+                // 正常終了・エラー終了に関わらず、最終的に必ずカーソルを通常状態に戻す
+                Mouse.OverrideCursor = null;
             }
         }
 
