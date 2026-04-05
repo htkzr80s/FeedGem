@@ -466,6 +466,32 @@ namespace FeedGem.Views
             await ExportOpmlAsync();
         }
 
+        // 記事タイトルをクリップボードにコピーする処理
+        private void CopyTitle_Click(object sender, RoutedEventArgs e)
+        {
+            // 現在選択されている行のデータを確認
+            if (ArticleListView.SelectedItem is ArticleItem item)
+            {
+                // タイトルをクリップボードへ送る
+                System.Windows.Clipboard.SetText(item.Title);
+                // ユーザーに状況を伝える
+                LogTextBlock.Text = "タイトルをコピーしました。";
+            }
+        }
+
+        // URLをクリップボードにコピーする処理
+        private void CopyUrl_Click(object sender, RoutedEventArgs e)
+        {
+            // 現在選択されている行のデータを確認
+            if (ArticleListView.SelectedItem is ArticleItem item)
+            {
+                // URLをクリップボードへ送る
+                System.Windows.Clipboard.SetText(item.Url);
+                // ユーザーに状況を伝える
+                LogTextBlock.Text = "URLをコピーしました。";
+            }
+        }
+
         // 表示内容をすべてクリアする（削除時などに使用）
         public void ClearAllPanels()
         {

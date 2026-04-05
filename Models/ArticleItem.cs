@@ -6,13 +6,48 @@ namespace FeedGem.Models
     // 記事リスト（中央ペイン）に表示するためのデータモデル
     public class ArticleItem : INotifyPropertyChanged
     {
-        public string Title { get; set; } = "";
-        public string Date { get; set; } = "";
-        public string Url { get; set; } = "";
-        public string Summary { get; set; } = "";
-
+        private string _title = "";
+        private string _date = "";
+        private string _url = "";
+        private string _summary = "";
+        private string _feedTitle = "";
         private bool _isRead = false;
-        
+
+        // 記事タイトル
+        public string Title
+        {
+            get => _title;
+            set { if (_title != value) { _title = value; OnPropertyChanged(); } }
+        }
+
+        // 投稿日時
+        public string Date
+        {
+            get => _date;
+            set { if (_date != value) { _date = value; OnPropertyChanged(); } }
+        }
+
+        // 記事URL
+        public string Url
+        {
+            get => _url;
+            set { if (_url != value) { _url = value; OnPropertyChanged(); } }
+        }
+
+        // 記事の概要（三点リーダー表示用など）
+        public string Summary
+        {
+            get => _summary;
+            set { if (_summary != value) { _summary = value; OnPropertyChanged(); } }
+        }
+
+        // 購読サイト名（今回追加した2行目表示用）
+        public string FeedTitle
+        {
+            get => _feedTitle;
+            set { if (_feedTitle != value) { _feedTitle = value; OnPropertyChanged(); } }
+        }
+
         // 未読・既読の判定フラグ（false: 未読, true: 既読）
         public bool IsRead
         {
@@ -26,6 +61,7 @@ namespace FeedGem.Models
                 }
             }
         }
+
         public event PropertyChangedEventHandler? PropertyChanged;
 
         // プロパティ変更イベントを発火させるヘルパーメソッド
