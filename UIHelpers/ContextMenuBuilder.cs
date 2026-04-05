@@ -122,9 +122,10 @@ namespace FeedGem.UIHelpers
                 _updateTime();
                 _log.Text = "更新が完了しました。";
             }
-            finally
+            catch (Exception ex)
             {
-                Mouse.OverrideCursor = null;
+                LoggingService.Error("全体更新失敗", ex);
+                _log.Text = "更新中にエラーが発生しました。";
             }
         }
 

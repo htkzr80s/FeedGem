@@ -66,8 +66,7 @@ namespace FeedGem.Services
                 }
                 catch (Exception ex)
                 {
-                    // 通信エラーなどはログに出すだけ
-                    Debug.WriteLine($"フィード更新失敗: {feed.Title} - {ex.Message}");
+                    LoggingService.Error($"フィード更新失敗: {feed.Title}", ex);
                 }
             }
 
@@ -192,8 +191,7 @@ namespace FeedGem.Services
             }
             catch (Exception ex)
             {
-                // 通信エラーや解析エラーをデバッグ出力
-                Debug.WriteLine($"記事取得失敗: {ex.Message}");
+                LoggingService.Error("記事取得失敗", ex);
             }
         }
 

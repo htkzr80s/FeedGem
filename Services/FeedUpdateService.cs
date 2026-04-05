@@ -24,7 +24,7 @@ namespace FeedGem.Services
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"更新失敗: {feed.Title} - {ex.Message}");
+                    LoggingService.Error($"更新失敗: {feed.Title}", ex);
                 }
             }
 

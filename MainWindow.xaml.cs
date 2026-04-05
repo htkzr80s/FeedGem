@@ -257,6 +257,7 @@ namespace FeedGem
 
             // フィードの探索
             var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
+            LogTextBlock.Text = "フィードを探索中...";
 
             bool added = false; // 追加が行われたかを判定するフラグ
 
@@ -270,6 +271,7 @@ namespace FeedGem
                 await _feedService.FetchAndSaveEntriesAsync(feedId, selected.Url);
 
                 added = true;
+                LogTextBlock.Text = "フィードを追加しました。";
             }
             else if (candidates.Count > 1)
             {
@@ -290,6 +292,7 @@ namespace FeedGem
             else
             {
                 MessageBox.Show("フィードが見つかりません。URLが正しいか確認してください。", "お知らせ");
+                LogTextBlock.Text = "フィードが見つかりませんでした。";
             }
 
             if (added)
@@ -384,6 +387,7 @@ namespace FeedGem
         {
             var dialog = new OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
             if (dialog.ShowDialog() != true) return;
+            LogTextBlock.Text = "インポート中...";
 
             try
             {
@@ -393,6 +397,7 @@ namespace FeedGem
             }
             catch (Exception ex)
             {
+                LoggingService.Error("OPMLインポート失敗", ex);
                 MessageBox.Show($"インポート失敗: {ex.Message}");
             }
         }
@@ -407,6 +412,7 @@ namespace FeedGem
         {
             var dialog = new SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
             if (dialog.ShowDialog() != true) return;
+            LogTextBlock.Text = "エクスポート中...";
 
             try
             {
@@ -417,7 +423,9 @@ namespace FeedGem
             }
             catch (Exception ex)
             {
+                LoggingService.Error("OPMLエクスポート失敗", ex);
                 MessageBox.Show($"エクスポート失敗: {ex.Message}");
+                LogTextBlock.Text = "エクスポートに失敗しました。";
             }
         }
         private async void ExportOpml_Click(object sender, RoutedEventArgs e)

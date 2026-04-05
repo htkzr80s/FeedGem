@@ -122,7 +122,7 @@ namespace FeedGem.Services
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"探索エラー: {ex.Message}");
+                    LoggingService.Error("探索エラー", ex);
                 }
             }
             return candidates;
