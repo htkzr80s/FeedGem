@@ -217,6 +217,12 @@ namespace FeedGem.UIHelpers
 
             await _feedService.DeleteFeedAsync(id);
             await _reloadTree();
+
+            // 削除したフィードの記事が表示され続けないよう、UIをクリアする
+            if (System.Windows.Application.Current.MainWindow is MainWindow main)
+            {
+                main.ClearAllPanels();
+            }
         }
     }
 }

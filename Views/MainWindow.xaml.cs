@@ -465,6 +465,15 @@ namespace FeedGem.Views
             await ExportOpmlAsync();
         }
 
+        // 表示内容をすべてクリアする（削除時などに使用）
+        public void ClearAllPanels()
+        {
+            // 中央の記事リストを空にする
+            currentArticles.Clear();
+            // 右側のプレビュー（ブラウザ）を空のページにする
+            PreviewBrowser.NavigateToString("<html><body></body></html>");
+        }
+
         // 最終更新日時表示を更新
         private void UpdateLastUpdateTime()
         {
