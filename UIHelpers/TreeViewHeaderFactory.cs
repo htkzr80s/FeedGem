@@ -11,7 +11,7 @@ namespace FeedGem.UIHelpers
         {
             var panel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
                 Margin = new Thickness(0, 2, 0, 2)
             };
 
@@ -27,7 +27,7 @@ namespace FeedGem.UIHelpers
             }
             else
             {
-                var image = new Image
+                var image = new System.Windows.Controls.Image
                 {
                     Width = 16,
                     Height = 16,

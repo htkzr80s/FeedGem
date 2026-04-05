@@ -7,6 +7,10 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Input = System.Windows.Input;
+using WpfPoint = System.Windows.Point;
+using WpfDragEventArgs = System.Windows.DragEventArgs;
+using WpfDragDropEffects = System.Windows.DragDropEffects;
 
 namespace FeedGem.UIHelpers
 {
@@ -15,7 +19,7 @@ namespace FeedGem.UIHelpers
         private readonly FeedRepository _repository = repository;
         private readonly Func<Task> _reloadTree = reloadTree;
 
-        private Point _startPoint;
+        private WpfPoint _startPoint;
         private TreeViewItem? _dragSourceItem;
 
         // ドラッグ開始位置記録
@@ -25,11 +29,11 @@ namespace FeedGem.UIHelpers
         }
 
         // ドラッグ開始判定
-        public void OnMouseMove(object sender, MouseEventArgs e)
+        public void OnMouseMove(object sender, Input.MouseEventArgs e)
         {
             if (e.LeftButton != MouseButtonState.Pressed) return;
 
-            Point pos = e.GetPosition(null);
+            WpfPoint pos = e.GetPosition(null);
             Vector diff = _startPoint - pos;
 
             if (System.Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
@@ -39,19 +43,19 @@ namespace FeedGem.UIHelpers
                 if (item == null) return;
 
                 _dragSourceItem = item;
-                DragDrop.DoDragDrop(item, item, DragDropEffects.Move);
+                DragDrop.DoDragDrop(item, item, WpfDragDropEffects.Move);
             }
         }
 
         // ドラッグ中
-        public static void OnDragOver(DragEventArgs e)
+        public static void OnDragOver(WpfDragEventArgs e)
         {
-            e.Effects = DragDropEffects.Move;
+            e.Effects = WpfDragDropEffects.Move;
             e.Handled = true;
         }
 
         // ドロップ処理
-        public async Task OnDrop(object sender, DragEventArgs e)
+        public async Task OnDrop(object sender, WpfDragEventArgs e)
         {
             if (_dragSourceItem?.Tag is not TreeTag sourceTag || sourceTag.FeedId == null)
                 return;

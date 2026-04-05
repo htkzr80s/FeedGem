@@ -1,6 +1,7 @@
 ﻿using System.Linq;
 using System.Windows;
 using FeedGem.Data;
+using MsgBox = System.Windows.MessageBox;
 
 public class TestArea
 {
@@ -13,7 +14,7 @@ public class TestArea
 
         if (firstFeed == null)
         {
-            MessageBox.Show("フィードなし");
+            MsgBox.Show("フィードなし");
             return;
         }
 
@@ -21,6 +22,6 @@ public class TestArea
 
         string result = string.Join("\n", articles.Select(a => $"{a.Date} | {a.Title}"));
 
-        MessageBox.Show(result);
+        MsgBox.Show(result);
     }
 }

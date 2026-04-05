@@ -47,7 +47,6 @@ namespace FeedGem.Data
             }
             catch { /* 無視 */ }
 
-            // ★ここを追加：古いデータベース用に folder_path カラムを強制追加する
             try
             {
                 using var alterFolderCommand = new SqliteCommand("ALTER TABLE feeds ADD COLUMN folder_path TEXT NOT NULL DEFAULT '/';", connection);

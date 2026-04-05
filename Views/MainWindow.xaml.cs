@@ -13,8 +13,12 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using Media = System.Windows.Media;
+using Input = System.Windows.Input;
+using MsgBox = System.Windows.MessageBox;
+using WpfDragEventArgs = System.Windows.DragEventArgs;
 
-namespace FeedGem
+namespace FeedGem.Views
 {
     public partial class MainWindow : Window
     {
@@ -110,12 +114,27 @@ namespace FeedGem
 
         #region --- UIイベントハンドラ ---
 
-        // トレイアイコン初期化
+        // トレイアイコン初期化（埋め込みリソース版）
         private void InitializeTray()
         {
-            _normalIcon = new System.Drawing.Icon("app.ico");
-            _unreadIcon = new System.Drawing.Icon("app_unread.ico");
+            // アセンブリ取得
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
 
+            // app.ico 読み込み
+            using var normalStream = assembly.GetManifestResourceStream("FeedGem.Resources.app.ico");
+            if (normalStream != null)
+            {
+                _normalIcon = new System.Drawing.Icon(normalStream);
+            }
+
+            // app_unread.ico 読み込み
+            using var unreadStream = assembly.GetManifestResourceStream("FeedGem.Resources.unread.ico");
+            if (unreadStream != null)
+            {
+                _unreadIcon = new System.Drawing.Icon(unreadStream);
+            }
+
+            // NotifyIcon生成
             _notifyIcon = new System.Windows.Forms.NotifyIcon
             {
                 Icon = _normalIcon,
@@ -123,7 +142,7 @@ namespace FeedGem
                 Text = "FeedGem"
             };
 
-            // シングルクリックで復帰
+            // 左クリックで復帰
             _notifyIcon.MouseClick += (s, e) =>
             {
                 if (e.Button == System.Windows.Forms.MouseButtons.Left)
@@ -228,7 +247,7 @@ namespace FeedGem
             if (SearchBox.Text == "URLを入力してEnter...")
             {
                 SearchBox.Text = ""; // ヒント文字を消す
-                SearchBox.Foreground = Brushes.Black; // 文字色を黒にする
+                SearchBox.Foreground = Media.Brushes.Black; // 文字色を黒にする
             }
         }
 
@@ -240,7 +259,7 @@ namespace FeedGem
         }
 
         // テキストボックス（SearchBox）でキーが押された時の処理
-        private void SearchBox_KeyDown(object sender, KeyEventArgs e)
+        private void SearchBox_KeyDown(object sender, Input.KeyEventArgs e)
         {
             // Enterキーが押されたか確認
             if (e.Key == Key.Enter)
@@ -291,7 +310,7 @@ namespace FeedGem
             // 探索に失敗した場合などのケア
             else
             {
-                MessageBox.Show("フィードが見つかりません。URLが正しいか確認してください。", "お知らせ");
+                MsgBox.Show("フィードが見つかりません。URLが正しいか確認してください。", "お知らせ");
                 LogTextBlock.Text = "フィードが見つかりませんでした。";
             }
 
@@ -310,7 +329,7 @@ namespace FeedGem
             if (FilterBox.Text == "記事を検索...")
             {
                 FilterBox.Text = "";
-                FilterBox.Foreground = Brushes.Black;
+                FilterBox.Foreground = Media.Brushes.Black;
             }
         }
 
@@ -385,7 +404,7 @@ namespace FeedGem
         // OPMLインポート本体処理
         private async Task ImportOpmlAsync()
         {
-            var dialog = new OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
+            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
             if (dialog.ShowDialog() != true) return;
             LogTextBlock.Text = "インポート中...";
 
@@ -398,7 +417,7 @@ namespace FeedGem
             catch (Exception ex)
             {
                 LoggingService.Error("OPMLインポート失敗", ex);
-                MessageBox.Show($"インポート失敗: {ex.Message}");
+                MsgBox.Show($"インポート失敗: {ex.Message}");
             }
         }
 
@@ -410,7 +429,7 @@ namespace FeedGem
         // OPMLエクスポート本体処理
         private async Task ExportOpmlAsync()
         {
-            var dialog = new SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
+            var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
             if (dialog.ShowDialog() != true) return;
             LogTextBlock.Text = "エクスポート中...";
 
@@ -424,7 +443,7 @@ namespace FeedGem
             catch (Exception ex)
             {
                 LoggingService.Error("OPMLエクスポート失敗", ex);
-                MessageBox.Show($"エクスポート失敗: {ex.Message}");
+                MsgBox.Show($"エクスポート失敗: {ex.Message}");
                 LogTextBlock.Text = "エクスポートに失敗しました。";
             }
         }
@@ -461,19 +480,19 @@ namespace FeedGem
         }
 
         // マウス移動時にドラッグを開始する
-        private void FeedTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
+        private void FeedTreeView_PreviewMouseMove(object sender, Input.MouseEventArgs e)
         {
             _dragHandler.OnMouseMove(sender, e);
         }
 
         // ドラッグ中のマウスカーソル状態
-        private void FeedTreeView_DragOver(object sender, DragEventArgs e)
+        private void FeedTreeView_DragOver(object sender, WpfDragEventArgs e)
         {
             TreeDragDropHandler.OnDragOver(e);
         }
 
         // ドロップされた時の処理
-        private async void FeedTreeView_Drop(object sender, DragEventArgs e)
+        private async void FeedTreeView_Drop(object sender, WpfDragEventArgs e)
         {
             await _dragHandler.OnDrop(sender, e);
         }

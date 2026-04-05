@@ -2,6 +2,8 @@
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.Views;
+using Wpf = System.Windows.Controls;
+using WinForms = System.Windows.Forms;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -9,6 +11,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Media = System.Windows.Media;
+using Input = System.Windows.Input;
+using MsgBox = System.Windows.MessageBox;
 
 namespace FeedGem.UIHelpers
 {
@@ -32,27 +37,27 @@ namespace FeedGem.UIHelpers
         private readonly Func<Task> _exportOpml = exportOpml;
 
         // ContextMenu生成
-        public ContextMenu Build(TreeViewItem? treeViewItem)
+        public Wpf.ContextMenu Build(TreeViewItem? treeViewItem)
         {
-            var menu = new ContextMenu();
+            var menu = new Wpf.ContextMenu();
 
-            var refreshItem = new MenuItem { Header = "今すぐ更新" };
+            var refreshItem = new Wpf.MenuItem { Header = "今すぐ更新" };
             refreshItem.Click += async (s, e) => await RefreshAll();
             menu.Items.Add(refreshItem);
 
-            var addFolderItem = new MenuItem { Header = "フォルダを作成..." };
+            var addFolderItem = new Wpf.MenuItem { Header = "フォルダを作成..." };
             addFolderItem.Click += async (s, e) => await AddFolder(treeViewItem);
             menu.Items.Add(addFolderItem);
 
             menu.Items.Add(new Separator());
 
             // OPMLインポート
-            var importOpmlItem = new MenuItem { Header = "OPMLをインポート..." };
+            var importOpmlItem = new Wpf.MenuItem { Header = "OPMLをインポート..." };
             importOpmlItem.Click += async (s, e) => await _importOpml();
             menu.Items.Add(importOpmlItem);
 
             // OPMLエクスポート
-            var exportOpmlItem = new MenuItem { Header = "OPMLをエクスポート..." };
+            var exportOpmlItem = new Wpf.MenuItem { Header = "OPMLをエクスポート..." };
             exportOpmlItem.Click += async (s, e) => await _exportOpml();
             menu.Items.Add(exportOpmlItem);
 
@@ -64,7 +69,7 @@ namespace FeedGem.UIHelpers
                 {
                     long feedId = tag.FeedId.Value;
 
-                    var markAllReadItem = new MenuItem { Header = "すべて既読にする" };
+                    var markAllReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
                     markAllReadItem.Click += async (s, e) =>
                     {
                         await _feedService.MarkAllAsReadAsync(feedId);
@@ -72,11 +77,11 @@ namespace FeedGem.UIHelpers
                     };
                     menu.Items.Add(markAllReadItem);
 
-                    var renameItem = new MenuItem { Header = "名前を変更..." };
+                    var renameItem = new Wpf.MenuItem { Header = "名前を変更..." };
                     renameItem.Click += async (s, e) => await Rename(treeViewItem);
                     menu.Items.Add(renameItem);
 
-                    var deleteFeedItem = new MenuItem { Header = "このフィードを削除", Foreground = Brushes.Red };
+                    var deleteFeedItem = new Wpf.MenuItem { Header = "このフィードを削除", Foreground = Media.Brushes.Red };
                     deleteFeedItem.Click += async (s, e) => await DeleteFeed(feedId);
                     menu.Items.Add(deleteFeedItem);
                 }
@@ -84,14 +89,14 @@ namespace FeedGem.UIHelpers
                 {
                     string folderPath = tag.FolderPath;
 
-                    var renameItem = new MenuItem { Header = "名前を変更..." };
+                    var renameItem = new Wpf.MenuItem { Header = "名前を変更..." };
                     renameItem.Click += async (s, e) => await Rename(treeViewItem);
                     menu.Items.Add(renameItem);
 
-                    var deleteFolderItem = new MenuItem { Header = "フォルダを削除", Foreground = Brushes.Red };
+                    var deleteFolderItem = new Wpf.MenuItem { Header = "フォルダを削除", Foreground = Media.Brushes.Red };
                     deleteFolderItem.Click += async (s, e) =>
                     {
-                        var result = MessageBox.Show(
+                        var result = MsgBox.Show(
                             "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
                             "確認",
                             MessageBoxButton.YesNo,
@@ -113,7 +118,7 @@ namespace FeedGem.UIHelpers
         private async Task RefreshAll()
         {
             _log.Text = "記事を更新中...";
-            Mouse.OverrideCursor = Cursors.Wait;
+            Mouse.OverrideCursor = Input.Cursors.Wait;
 
             try
             {
@@ -127,15 +132,20 @@ namespace FeedGem.UIHelpers
                 LoggingService.Error("全体更新失敗", ex);
                 _log.Text = "更新中にエラーが発生しました。";
             }
+            finally
+            {
+                // 正常終了でもエラー終了でも、ここでカーソルを戻す
+                Mouse.OverrideCursor = null;
+            }
         }
 
         // フォルダ追加
         private async Task AddFolder(TreeViewItem? target)
         {
             var dialog = new InputDialog("フォルダ名");
-            if (Application.Current?.MainWindow != null)
+            if (System.Windows.Application.Current?.MainWindow != null)
             {
-                dialog.Owner = Application.Current.MainWindow;
+                dialog.Owner = System.Windows.Application.Current.MainWindow;
             }
 
             if (dialog.ShowDialog() != true) return;
@@ -166,8 +176,8 @@ namespace FeedGem.UIHelpers
                 string current = folderPath.TrimStart('/');
 
                 var dialog = new InputDialog("新しい名前", current);
-                if (Application.Current?.MainWindow != null)
-                    dialog.Owner = Application.Current.MainWindow;
+                if (System.Windows.Application.Current?.MainWindow != null)
+                    dialog.Owner = System.Windows.Application.Current.MainWindow;
 
                 if (dialog.ShowDialog() != true) return;
 
@@ -186,8 +196,8 @@ namespace FeedGem.UIHelpers
                 if (target == null) return;
 
                 var dialog = new InputDialog("新しい名前", target.Title);
-                if (Application.Current?.MainWindow != null)
-                    dialog.Owner = Application.Current.MainWindow;
+                if (System.Windows.Application.Current?.MainWindow != null)
+                    dialog.Owner = System.Windows.Application.Current.MainWindow;
 
                 if (dialog.ShowDialog() != true) return;
 
@@ -202,7 +212,7 @@ namespace FeedGem.UIHelpers
         // フィード削除
         private async Task DeleteFeed(long id)
         {
-            if (MessageBox.Show("削除しますか？", "確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+            if (MsgBox.Show("削除しますか？", "確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
                 return;
 
             await _feedService.DeleteFeedAsync(id);

@@ -1,4 +1,5 @@
-﻿using System.Linq;
+﻿using FeedGem.Views;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -7,7 +8,7 @@ using System.Windows.Media.Imaging;
 
 namespace FeedGem
 {
-    public partial class App : Application
+    public partial class App : System.Windows.Application
     {
         // Shell32.dllの関数をインポート
         [LibraryImport("shell32.dll", SetLastError = true)]
@@ -27,7 +28,7 @@ namespace FeedGem
             var assembly = Assembly.GetExecutingAssembly();
 
             // ストリームからアイコンリソースを読み込み
-            using var stream = assembly.GetManifestResourceStream("FeedGem.app.ico");
+            using var stream = assembly.GetManifestResourceStream("FeedGem.Resources.app.ico");
             if (stream == null) return null;
 
             // アイコンのデコーダーを作成し、全フレームを展開
