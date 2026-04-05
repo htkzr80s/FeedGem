@@ -206,6 +206,26 @@ namespace FeedGem.Services
             }
         }
 
+        // 指定したフォルダ内のすべてのフィード記事を既読にする
+        public async Task MarkFolderAsReadAsync(string folderPath)
+        {
+            var feeds = await _repository.GetAllFeedsAsync();
+
+            // 対象フォルダ内のフィードを抽出（前方一致でサブフォルダも含む）
+            var targetFeeds = feeds.Where(f => f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/"));
+
+            foreach (var feed in targetFeeds)
+            {
+                if (feed.Url.StartsWith("folder://")) continue;
+
+                var entries = await _repository.GetEntriesByFeedIdAsync(feed.Id);
+                foreach (var entry in entries)
+                {
+                    await _repository.MarkAsReadAsync(entry.Url);
+                }
+            }
+        }
+
         // フィード名変更
         public async Task RenameFeedAsync(long feedId, string newName)
         {

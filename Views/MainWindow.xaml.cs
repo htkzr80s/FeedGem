@@ -87,7 +87,8 @@ namespace FeedGem.Views
                 LogTextBlock,
                 UpdateLastUpdateTime,
                 ImportOpmlAsync,
-                ExportOpmlAsync
+                ExportOpmlAsync,
+                MarkCurrentListAsRead
             );
 
             _dragHandler = new TreeDragDropHandler(
@@ -598,6 +599,15 @@ namespace FeedGem.Views
                 currentArticles.Add(article);
             }
             ArticleListView.ItemsSource = currentArticles;
+        }
+
+        // 現在表示されている記事リストをすべて既読状態に更新する
+        public void MarkCurrentListAsRead()
+        {
+            foreach (var article in currentArticles)
+            {
+                article.IsRead = true;
+            }
         }
     }
 }

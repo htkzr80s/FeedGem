@@ -21,15 +21,13 @@ namespace FeedGem.Services
                 try
                 {
                     await _feedService.FetchAndSaveEntriesAsync(feed.Id, feed.Url);
+                    await _repository.DeleteOldEntriesAsync();
                 }
                 catch (Exception ex)
                 {
                     LoggingService.Error($"更新失敗: {feed.Title}", ex);
                 }
             }
-
-            // 古い記事削除もここに統一
-            await _repository.DeleteOldEntriesAsync();
         }
 
         // 単体更新（将来UIから使える）

@@ -320,25 +320,42 @@ namespace FeedGem.Data
             }
         }
 
-        // 各フィードごとに最新20件を除いた古い記事を一括削除する
+        // 古い記事を削除し、各フィード最新30件のみを保持する
         public async Task DeleteOldEntriesAsync()
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // ROW_NUMBERを使って、各feed_idごとに新しい順に番号を振り、21番目以降を削除対象にする
-            string deleteQuery = @"
-                DELETE FROM entries 
-                WHERE id IN (
-                    SELECT id FROM (
-                        SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY published_date DESC, id DESC) as row_num
-                        FROM entries
-                    ) WHERE row_num > 20
-                )";
+            // 全フィードのIDを取得
+            var feedIds = new List<long>();
+            using (var getFeedsCmd = new SqliteCommand("SELECT id FROM feeds", connection))
+            using (var reader = await getFeedsCmd.ExecuteReaderAsync())
+            {
+                while (await reader.ReadAsync())
+                {
+                    feedIds.Add(reader.GetInt64(0));
+                }
+            }
 
-            using var command = new SqliteCommand(deleteQuery, connection);
-            await command.ExecuteNonQueryAsync();
+            // 各フィードごとに、最新20件以外を削除する
+            foreach (var feedId in feedIds)
+            {
+                string deleteQuery = @"
+                    DELETE FROM entries 
+                    WHERE feed_id = @feedId 
+                    AND id NOT IN (
+                        SELECT id FROM entries 
+                        WHERE feed_id = @feedId 
+                        ORDER BY published_date DESC 
+                        LIMIT 30
+                    );";
+
+                using var deleteCmd = new SqliteCommand(deleteQuery, connection);
+                deleteCmd.Parameters.AddWithValue("@feedId", feedId);
+                await deleteCmd.ExecuteNonQueryAsync();
+            }
         }
+
     }
 
     // 内部管理用のシンプルなクラス

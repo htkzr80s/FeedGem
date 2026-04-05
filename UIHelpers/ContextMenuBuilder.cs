@@ -25,7 +25,8 @@ namespace FeedGem.UIHelpers
         TextBlock log,
         Action updateTime,
         Func<Task> importOpml,
-        Func<Task> exportOpml)
+        Func<Task> exportOpml,
+        Action markListAsRead)
     {
         private readonly FeedRepository _repository = repository;
         private readonly FeedService _feedService = feedService;
@@ -35,6 +36,7 @@ namespace FeedGem.UIHelpers
         private readonly Action _updateTime = updateTime;
         private readonly Func<Task> _importOpml = importOpml;
         private readonly Func<Task> _exportOpml = exportOpml;
+        private readonly Action _markListAsRead = markListAsRead;
 
         // ContextMenu生成
         public Wpf.ContextMenu Build(TreeViewItem? treeViewItem)
@@ -68,12 +70,12 @@ namespace FeedGem.UIHelpers
                 if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)
                 {
                     long feedId = tag.FeedId.Value;
-
                     var markAllReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
                     markAllReadItem.Click += async (s, e) =>
                     {
                         await _feedService.MarkAllAsReadAsync(feedId);
-                        await _reloadTree();
+                        _markListAsRead(); // 中央リストを即時反映
+                        await _reloadTree(); // ツリーの未読数を即時反映
                     };
                     menu.Items.Add(markAllReadItem);
 
@@ -89,22 +91,39 @@ namespace FeedGem.UIHelpers
                 {
                     string folderPath = tag.FolderPath;
 
-                    var renameItem = new Wpf.MenuItem { Header = "名前を変更..." };
-                    renameItem.Click += async (s, e) => await Rename(treeViewItem);
-                    menu.Items.Add(renameItem);
+                    // フォルダ向けのすべて既読メニューを追加
+                    var markFolderReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
+                    markFolderReadItem.Click += async (s, e) =>
+                    {
+                        await _feedService.MarkFolderAsReadAsync(folderPath);
+                        _markListAsRead(); // 中央リストを即時反映
+                        await _reloadTree(); // ツリーの未読数を即時反映
+                    };
+                    menu.Items.Add(markFolderReadItem);
 
                     var deleteFolderItem = new Wpf.MenuItem { Header = "フォルダを削除", Foreground = Media.Brushes.Red };
                     deleteFolderItem.Click += async (s, e) =>
                     {
-                        var result = MsgBox.Show(
-                            "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
-                            "確認",
-                            MessageBoxButton.YesNo,
-                            MessageBoxImage.Warning);
+                        // 1. 全フィードを取得して、このフォルダ（またはサブフォルダ）に属するフィードがあるか確認
+                        var allFeeds = await _repository.GetAllFeedsAsync();
+                        bool hasContents = allFeeds.Any(f =>
+                            !f.Url.StartsWith("folder://") && // ダミー記事を除外
+                            (f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/")));
 
-                        if (result != MessageBoxResult.Yes)
-                            return;
+                        // 2. 中身がある場合のみ警告を出す
+                        if (hasContents)
+                        {
+                            var result = MsgBox.Show(
+                                "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
+                                "確認",
+                                MessageBoxButton.YesNo,
+                                MessageBoxImage.Warning);
 
+                            if (result != MessageBoxResult.Yes)
+                                return;
+                        }
+
+                        // 3. 削除処理とツリーの再読み込み
                         await _feedService.DeleteFolderAsync(folderPath);
                         await _reloadTree();
                     };
