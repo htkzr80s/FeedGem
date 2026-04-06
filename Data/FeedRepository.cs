@@ -89,7 +89,19 @@ namespace FeedGem.Data
             await connection.OpenAsync();
 
             // 日付の降順で記事を取得
-            string query = "SELECT title, published_date, url, summary, is_read FROM entries WHERE feed_id = @feedId ORDER BY published_date DESC";
+            string query = @"
+            SELECT 
+                e.title, 
+                e.published_date, 
+                e.url, 
+                e.summary, 
+                e.is_read, 
+                f.title
+            FROM entries e
+            JOIN feeds f ON e.feed_id = f.id
+            WHERE e.feed_id = @feedId
+            ORDER BY e.published_date DESC";
+
             using var command = new SqliteCommand(query, connection);
             command.Parameters.AddWithValue("@feedId", feedId);
 
@@ -103,7 +115,8 @@ namespace FeedGem.Data
                     Date = reader.GetString(1),
                     Url = reader.GetString(2),
                     Summary = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    IsRead = reader.GetInt32(4) == 1
+                    IsRead = reader.GetInt32(4) == 1,
+                    FeedTitle = reader.GetString(5)
                 });
             }
             return articles;
@@ -157,6 +170,19 @@ namespace FeedGem.Data
             command.Parameters.AddWithValue("@pubDate", pubDate);
 
             await command.ExecuteNonQueryAsync();
+        }
+        // URLで記事の存在チェック
+        public async Task<bool> EntryExistsByUrlAsync(string url)
+        {
+            using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
+            await conn.OpenAsync();
+
+            var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT 1 FROM entries WHERE url = @url LIMIT 1";
+            cmd.Parameters.AddWithValue("@url", url);
+
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null;
         }
 
         // 記事を既読状態（is_read = 1）に更新する

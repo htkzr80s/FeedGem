@@ -112,14 +112,47 @@ namespace FeedGem.Services
                             string title = item.Title?.Text ?? "";
                             string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
 
-                            // 本文の抽出ロジック（元コードのロジックを完全再現）
+                            // 本文取得（優先順位つき）
                             string summary = "";
-                            var contentEncoded = item.ElementExtensions.FirstOrDefault(e => e.OuterName == "encoded" || e.OuterName == "content");
-                            if (contentEncoded != null)
+
+                            // ① content:encoded（最優先）
+                            var encodedExt = item.ElementExtensions
+                                .FirstOrDefault(e => e.OuterName == "encoded" || e.OuterName == "content");
+
+                            if (encodedExt != null)
                             {
                                 try
                                 {
-                                    using var extReader = contentEncoded.GetReader();
+                                    using var readerExt = encodedExt.GetReader();
+                                    var element = System.Xml.Linq.XElement.Load(readerExt);
+                                    summary = element.Value;
+                                }
+                                catch { }
+                            }
+
+                            // ② Content（次）
+                            if (string.IsNullOrEmpty(summary) && item.Content is System.ServiceModel.Syndication.TextSyndicationContent contentObj)
+                            {
+                                summary = contentObj.Text;
+                            }
+
+                            // ③ Summary（最後）
+                            if (string.IsNullOrEmpty(summary))
+                            {
+                                summary = item.Summary?.Text ?? "";
+                            }
+
+                            // ④ それでも空ならリンク
+                            if (string.IsNullOrEmpty(summary))
+                            {
+                                string fallbackLink = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
+                                summary = $"<a href='{fallbackLink}'>記事を開く</a>";
+                            }
+                            if (encodedExt != null)
+                            {
+                                try
+                                {
+                                    using var extReader = encodedExt.GetReader();
                                     var element = System.Xml.Linq.XElement.Load(extReader);
                                     summary = element.Value;
                                 }
@@ -144,6 +177,15 @@ namespace FeedGem.Services
                                                    DateTimeOffset.Now;
                             string published = pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
 
+                            // URLベースの重複チェック
+                            if (!string.IsNullOrEmpty(url))
+                            {
+                                bool exists = await _repository.EntryExistsByUrlAsync(url);
+                                if (exists)
+                                {
+                                    continue; // 既存記事はスキップ
+                                }
+                            }
                             await _repository.SaveEntryAsync(feedId, title, link, summary, published);
                         }
                         return;
@@ -185,6 +227,15 @@ namespace FeedGem.Services
                             published = DateTime.Now.ToString("yyyy/MM/dd HH:mm");
                         }
 
+                        // URLベースの重複チェック
+                        if (!string.IsNullOrEmpty(url))
+                        {
+                            bool exists = await _repository.EntryExistsByUrlAsync(url);
+                            if (exists)
+                            {
+                                continue; // 既存記事はスキップ
+                            }
+                        }
                         await _repository.SaveEntryAsync(feedId, title, link, desc, published);
                     }
                 }

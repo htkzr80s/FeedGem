@@ -234,14 +234,14 @@ namespace FeedGem.UIHelpers
             if (MsgBox.Show("削除しますか？", "確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
                 return;
 
-            await _feedService.DeleteFeedAsync(id);
-            await _reloadTree();
-
-            // 削除したフィードの記事が表示され続けないよう、UIをクリアする
+            // UIを先にクリアして不整合防止
             if (System.Windows.Application.Current.MainWindow is MainWindow main)
             {
                 main.ClearAllPanels();
             }
+
+            await _feedService.DeleteFeedAsync(id);
+            await _reloadTree();
         }
     }
 }
