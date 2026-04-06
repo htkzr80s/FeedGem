@@ -30,11 +30,20 @@ namespace FeedGem.Services
 
                 if (feed != null)
                 {
+                    string type = "Unknown";
+
+                    if (reader.LocalName == "feed")
+                        type = "Atom";
+                    else if (reader.LocalName == "rss")
+                        type = "RSS";
+
                     candidates.Add(new FeedCandidate
                     {
                         Title = feed.Title?.Text ?? "フィード",
-                        Url = url
+                        Url = url,
+                        Type = type
                     });
+
                     return candidates;
                 }
             }
@@ -54,29 +63,61 @@ namespace FeedGem.Services
                     foreach (var node in nodes)
                     {
                         string href = node.GetAttributeValue("href", "");
-                        string type = node.GetAttributeValue("type", "").ToLower();
+                        string typeAttr = node.GetAttributeValue("type", "").ToLower();
                         string title = node.GetAttributeValue("title", "");
+                        // HTMLデコード（&raquo; → »）
+                        title = System.Net.WebUtility.HtmlDecode(title);
 
                         if (string.IsNullOrEmpty(href)) continue;
 
-                        // 記事そのもののリンクや、コメント用フィードなどを除外するフィルタ
+                        // コメント系フィード除外
                         if (href.Contains("comment") || href.Contains("trackback")) continue;
 
-                        // 相対パス（/feed等）を絶対パス（https://.../feed）に変換
+                        // 相対 → 絶対URL
                         Uri baseUri = new(url);
                         Uri fullUri = new(baseUri, href);
                         string absoluteUrl = fullUri.AbsoluteUri;
 
-                        // タイトルが空ならサイトの<title>を借りる
+                        // 不要フィード除外
+                        if (absoluteUrl.EndsWith("/rss")
+                         || absoluteUrl.EndsWith("/atom")
+                         || absoluteUrl.Contains("comments"))
+                            continue;
+
+                        // タイトル補完
                         if (string.IsNullOrWhiteSpace(title) || title.Equals("RSS", StringComparison.CurrentCultureIgnoreCase))
                         {
                             title = doc.DocumentNode.SelectSingleNode("//title")?.InnerText?.Trim() ?? "不明なフィード";
                         }
 
-                        // 重複チェックをして追加
+                        // 種別判定
+                        string feedType = "Unknown";
+
+                        if (typeAttr.Contains("atom"))
+                            feedType = "Atom";
+                        else if (typeAttr.Contains("rss"))
+                            feedType = "RSS";
+
+                        // 重複チェック
                         if (!candidates.Any(c => c.Url == absoluteUrl))
                         {
-                            candidates.Add(new FeedCandidate { Title = title, Url = absoluteUrl });
+                            string originalTitle = title;
+                            // UI表示用
+                            string displayTitle = originalTitle;
+
+                            // 種別がタイトルに含まれていなければ付ける
+                            if (!displayTitle.Contains("RSS") && !displayTitle.Contains("Atom"))
+                            {
+                                displayTitle += $" ({feedType})";
+                            }
+
+                            candidates.Add(new FeedCandidate
+                            {
+                                Title = displayTitle,        // UI表示用
+                                OriginalTitle = originalTitle, // ← 追加
+                                Url = absoluteUrl,
+                                Type = feedType
+                            });
                         }
                     }
                 }
@@ -113,10 +154,32 @@ namespace FeedGem.Services
 
                     if (feed != null && !candidates.Any(c => c.Url == testUri.AbsoluteUri))
                     {
+                        string feedType = "Unknown";
+
+                        // URLベースで補助判定（確実）
+                        string lowerUrl = testUri.AbsoluteUri.ToLower();
+
+                        if (lowerUrl.Contains("atom"))
+                            feedType = "Atom";
+                        else if (lowerUrl.Contains("rss") || lowerUrl.Contains("feed"))
+                            feedType = "RSS";
+
+                        // 元タイトル取得
+                        string originalTitle = System.Net.WebUtility.HtmlDecode(feed.Title?.Text ?? "フィード");
+
+                        string displayTitle = originalTitle;
+
+                        if (!displayTitle.Contains("RSS") && !displayTitle.Contains("Atom"))
+                        {
+                            displayTitle += $" ({feedType})";
+                        }
+
                         candidates.Add(new FeedCandidate
                         {
-                            Title = feed.Title?.Text ?? "フィード",
-                            Url = testUri.AbsoluteUri
+                            Title = displayTitle,
+                            OriginalTitle = originalTitle,
+                            Url = testUri.AbsoluteUri,
+                            Type = feedType
                         });
                     }
                 }

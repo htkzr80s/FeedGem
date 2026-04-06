@@ -17,7 +17,25 @@ namespace FeedGem.Views
         {
             InitializeComponent();
             SetupWindowIcon();
-            CandidateListBox.ItemsSource = candidates; // リストボックスに候補をバインド
+
+            // まず全て未選択にする
+            foreach (var c in candidates)
+            {
+                c.IsSelected = false;
+            }
+
+            // /feed を優先して選択
+            var preferred = candidates.FirstOrDefault(c => c.Url.Contains("/feed"));
+
+            if (preferred != null)
+            {
+                preferred.IsSelected = true;
+            }
+            else if (candidates.Count > 0)
+            {
+                candidates[0].IsSelected = true;
+            }
+            CandidateListBox.ItemsSource = candidates;
         }
 
         // 高DPIアイコンを適用する
