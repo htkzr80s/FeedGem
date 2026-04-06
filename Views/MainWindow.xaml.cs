@@ -41,11 +41,8 @@ namespace FeedGem.Views
         private readonly OpmlService _opmlService;
         private readonly UrlSubscriptionService _subscriptionService;
         // --- トレイ関連 ---
-        private System.Windows.Forms.NotifyIcon? _notifyIcon;
+        private readonly TrayIconManager? _trayManager;
         private readonly bool _isExit = false;
-        // 通常アイコン / 未読アイコン
-        private System.Drawing.Icon? _normalIcon;
-        private System.Drawing.Icon? _unreadIcon;
         #endregion
 
         #region --- 初期設定系 ---
@@ -53,8 +50,9 @@ namespace FeedGem.Views
         public MainWindow()
         {
             InitializeComponent();
+
             // --- トレイ初期化 ---
-            InitializeTray();
+            _trayManager = new TrayIconManager(RestoreWindow);
 
             // 画面が表示された後に実行する
             // this.Loaded += (s, e) =>
@@ -118,44 +116,6 @@ namespace FeedGem.Views
 
         #region --- UIイベントハンドラ ---
 
-        // トレイアイコン初期化（埋め込みリソース版）
-        private void InitializeTray()
-        {
-            // アセンブリ取得
-            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-
-            // app.ico 読み込み
-            using var normalStream = assembly.GetManifestResourceStream("FeedGem.Resources.app.ico");
-            if (normalStream != null)
-            {
-                _normalIcon = new System.Drawing.Icon(normalStream);
-            }
-
-            // app_unread.ico 読み込み
-            using var unreadStream = assembly.GetManifestResourceStream("FeedGem.Resources.unread.ico");
-            if (unreadStream != null)
-            {
-                _unreadIcon = new System.Drawing.Icon(unreadStream);
-            }
-
-            // NotifyIcon生成
-            _notifyIcon = new System.Windows.Forms.NotifyIcon
-            {
-                Icon = _normalIcon,
-                Visible = true,
-                Text = "FeedGem"
-            };
-
-            // 左クリックで復帰
-            _notifyIcon.MouseClick += (s, e) =>
-            {
-                if (e.Button == System.Windows.Forms.MouseButtons.Left)
-                {
-                    RestoreWindow();
-                }
-            };
-        }
-
         // 最小化時にトレイへ
         private void MainWindow_StateChanged(object? sender, EventArgs e)
         {
@@ -182,7 +142,7 @@ namespace FeedGem.Views
             }
             else
             {
-                _notifyIcon?.Dispose();
+                _trayManager?.Dispose();
             }
         }
 
@@ -198,7 +158,7 @@ namespace FeedGem.Views
                 totalUnread += await _repository.GetUnreadCountAsync(f.Id);
             }
 
-            _notifyIcon?.Icon = totalUnread > 0 ? _unreadIcon : _normalIcon;
+            _trayManager?.SetUnreadState(totalUnread > 0);
         }
 
 
