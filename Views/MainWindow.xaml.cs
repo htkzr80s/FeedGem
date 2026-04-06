@@ -22,8 +22,9 @@ namespace FeedGem.Views
 {
     public partial class MainWindow : Window
     {
-        private static readonly ObservableCollection<ArticleItem> value = [];
         #region --- フィールド定義 ---
+
+        private static readonly ObservableCollection<ArticleItem> value = [];
 
         // 記事リスト（中央ペイン）に表示するためのデータ管理用
         private readonly ObservableCollection<ArticleItem> currentArticles = value;
@@ -48,6 +49,7 @@ namespace FeedGem.Views
         #endregion
 
         #region --- 初期設定系 ---
+
         public MainWindow()
         {
             InitializeComponent();
@@ -285,23 +287,43 @@ namespace FeedGem.Views
 
                 Mouse.OverrideCursor = null;
 
-                var result = await _subscriptionService.HandleCandidatesAsync(candidates, this);
+                var result = await _subscriptionService.HandleCandidatesAsync(candidates);
 
                 switch (result)
                 {
 
                     case SubscribeResult.Success:
-                        await LoadFeedsToTreeViewAsync();
                         LogTextBlock.Text = "フィードを追加しました。";
+                        await LoadFeedsToTreeViewAsync();
                         break;
+
+                    case SubscribeResult.NeedsSelection:
+                        var window = new FeedSelectionWindow(candidates) { Owner = this };
+
+                        if (window.ShowDialog() == true)
+                        {
+                            var selected = window.SelectedFeeds.FirstOrDefault();
+                            if (selected != null)
+                            {
+                                var secondResult = await _subscriptionService.AddFeedAsync(selected);
+
+                                if (secondResult == SubscribeResult.Success)
+                                    LogTextBlock.Text = "フィードを追加しました。";
+                                    await LoadFeedsToTreeViewAsync();
+                            }
+                        }
+                        break;
+
                     case SubscribeResult.NoCandidates:
                         LogTextBlock.Text = "フィードが見つかりませんでした。";
                         MsgBox.Show("フィードが見つかりませんでした。");
                         break;
+
                     case SubscribeResult.TooManyCandidates:
                         LogTextBlock.Text = "購読URLが多すぎるため処理を中止しました。";
                         MsgBox.Show("購読URLが多すぎるため処理を中止しました。");
                         break;
+
                     case SubscribeResult.SkippedOrEmpty:
                         LogTextBlock.Text = "重複、または記事がないため購読を中止しました。";
                         MsgBox.Show("重複、または記事がないため購読を中止しました。");
@@ -429,14 +451,13 @@ namespace FeedGem.Views
             {
                 var doc = await _opmlService.ExportAsync();
                 doc.Save(dialog.FileName);
-
                 LogTextBlock.Text = "エクスポートが完了しました。";
             }
             catch (Exception ex)
             {
+                LogTextBlock.Text = "エクスポートに失敗しました。";
                 LoggingService.Error("OPMLエクスポート失敗", ex);
                 MsgBox.Show($"エクスポート失敗: {ex.Message}");
-                LogTextBlock.Text = "エクスポートに失敗しました。";
             }
         }
         private async void ExportOpml_Click(object sender, RoutedEventArgs e)
