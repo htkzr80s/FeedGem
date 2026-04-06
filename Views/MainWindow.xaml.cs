@@ -42,7 +42,8 @@ namespace FeedGem.Views
         private readonly UrlSubscriptionService _subscriptionService;
         // --- トレイ関連 ---
         private readonly TrayIconManager? _trayManager;
-        private readonly bool _isExit = false;
+        private readonly UnreadCountService _unreadService;
+        private readonly NotificationService _notificationService;
         #endregion
 
         #region --- 初期設定系 ---
@@ -50,9 +51,6 @@ namespace FeedGem.Views
         public MainWindow()
         {
             InitializeComponent();
-
-            // --- トレイ初期化 ---
-            _trayManager = new TrayIconManager(RestoreWindow);
 
             // 画面が表示された後に実行する
             // this.Loaded += (s, e) =>
@@ -65,20 +63,14 @@ namespace FeedGem.Views
             // リポジトリを初期化（ファイルパスを指定）
             _repository = new FeedRepository("feedgem.db");
             _repository.Initialize(); // 旧 InitializeDatabase() の代わり
-
+            _unreadService = new UnreadCountService(_repository);
+            _notificationService = new NotificationService(RestoreWindow);
             _feedService = new FeedService(_repository);
             _updateService = new FeedUpdateService(_repository, _feedService);
             _discoveryService = new FeedDiscoveryService();
             _treeBuilder = new TreeBuilder(_repository);
             _opmlService = new OpmlService(_repository);
             _subscriptionService = new UrlSubscriptionService(_repository, _feedService);
-
-            // 起動時にデータを画面に反映させる
-            _ = LoadFeedsToTreeViewAsync();
-
-            // バックグラウンドでの更新処理を開始
-            _ = _updateService.UpdateAllAsync();
-            _ = StartBackgroundPollingAsync();
 
             _menuBuilder = new ContextMenuBuilder(
                 _repository,
@@ -91,6 +83,13 @@ namespace FeedGem.Views
                 ExportOpmlAsync,
                 MarkCurrentListAsRead
             );
+
+            // 起動時にデータを画面に反映させる
+            _ = LoadFeedsToTreeViewAsync();
+
+            // バックグラウンドでの更新処理を開始
+            _ = _updateService.UpdateAllAsync();
+            _ = StartBackgroundPollingAsync();
 
             _dragHandler = new TreeDragDropHandler(
                 _repository,
@@ -135,30 +134,16 @@ namespace FeedGem.Views
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            if (!_isExit)
-            {
-                e.Cancel = true;
-                this.Hide();
-            }
-            else
-            {
-                _trayManager?.Dispose();
-            }
+            _notificationService?.Dispose();
         }
 
         // 未読アイコン更新
         private async Task UpdateTrayIconAsync()
         {
-            var feeds = await _repository.GetAllFeedsAsync();
+            if (_notificationService == null) return;
 
-            int totalUnread = 0;
-
-            foreach (var f in feeds)
-            {
-                totalUnread += await _repository.GetUnreadCountAsync(f.Id);
-            }
-
-            _trayManager?.SetUnreadState(totalUnread > 0);
+            int totalUnread = await _unreadService.GetTotalUnreadAsync();
+            _notificationService.UpdateUnreadState(totalUnread);
         }
 
 
