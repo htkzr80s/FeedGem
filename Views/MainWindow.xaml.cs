@@ -278,23 +278,39 @@ namespace FeedGem.Views
 
             try
             {
-                Mouse.OverrideCursor = Input.Cursors.Wait;
+                Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
                 LogTextBlock.Text = "フィードを探索中...";
 
                 var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
+
                 Mouse.OverrideCursor = null;
 
-                bool added = await _subscriptionService.HandleCandidatesAsync(candidates, this);
+                var result = await _subscriptionService.HandleCandidatesAsync(candidates, this);
 
-                if (added)
+                switch (result)
                 {
-                    LogTextBlock.Text = "フィードを追加しました。";
-                    SearchBox.Text = "URLを入力してEnter...";
-                    await LoadFeedsToTreeViewAsync();
+
+                    case SubscribeResult.Success:
+                        await LoadFeedsToTreeViewAsync();
+                        LogTextBlock.Text = "フィードを追加しました。";
+                        break;
+                    case SubscribeResult.NoCandidates:
+                        LogTextBlock.Text = "フィードが見つかりませんでした。";
+                        MsgBox.Show("フィードが見つかりませんでした。");
+                        break;
+                    case SubscribeResult.TooManyCandidates:
+                        LogTextBlock.Text = "購読URLが多すぎるため処理を中止しました。";
+                        MsgBox.Show("購読URLが多すぎるため処理を中止しました。");
+                        break;
+                    case SubscribeResult.SkippedOrEmpty:
+                        LogTextBlock.Text = "重複、または記事がないため購読を中止しました。";
+                        MsgBox.Show("重複、または記事がないため購読を中止しました。");
+                        break;
                 }
             }
             finally
             {
+                SearchBox.Text = "URLを入力してEnter...";
                 Mouse.OverrideCursor = null;
             }
         }
@@ -459,8 +475,11 @@ namespace FeedGem.Views
         {
             ArticleListView.ItemsSource = null;
 
-            // WebView2のクリア
-            PreviewBrowser?.NavigateToString("<html><body></body></html>");
+            // CoreWebView2の初期化状態を確認してから操作する
+            if (PreviewBrowser != null && PreviewBrowser.CoreWebView2 != null)
+            {
+                PreviewBrowser.NavigateToString("<html><body></body></html>");
+            }
         }
 
         // 最終更新日時表示を更新
