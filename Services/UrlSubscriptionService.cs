@@ -4,8 +4,10 @@ using FeedGem.Services;
 using FeedGem.Views;
 using System.Collections.Generic;
 using System.Linq;
+using System.ServiceModel.Syndication;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Xml;
 
 namespace FeedGem.Services
 {
@@ -40,10 +42,34 @@ namespace FeedGem.Services
 
         public async Task<SubscribeResult> AddFeedAsync(FeedCandidate candidate)
         {
-            // ここで本来は重複チェック（URL重複など）を行う
-            // もし重複なら return SubscribeResult.SkippedOrEmpty;
+            string title = candidate.OriginalTitle;
 
-            long feedId = await _repository.AddFeedAsync("/", candidate.OriginalTitle, candidate.Url);
+            // 空ならフィードから取得
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                try
+                {
+                    var http = HttpClientProvider.Client;
+                    using var stream = await http.GetStreamAsync(candidate.Url);
+
+                    using var reader = XmlReader.Create(stream);
+                    var feed = SyndicationFeed.Load(reader);
+
+                    title = feed?.Title?.Text ?? "";
+                }
+                catch
+                {
+                    // 失敗したら無視
+                }
+            }
+
+            // それでも空ならURL
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                title = candidate.Url;
+            }
+
+            long feedId = await _repository.AddFeedAsync("/", title, candidate.Url);
 
             // 記事取得
             await _feedService.FetchAndSaveEntriesAsync(feedId, candidate.Url);

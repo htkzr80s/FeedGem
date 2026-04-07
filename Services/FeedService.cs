@@ -26,11 +26,17 @@ namespace FeedGem.Services
                 await semaphore.WaitAsync();
                 try
                 {
-                    var stream = await http.GetStreamAsync(feed.Url);
+                    using var stream = await http.GetStreamAsync(feed.Url);
                     var articles = FeedParser.Parse(stream);
 
                     foreach (var article in articles)
                     {
+                        if (!string.IsNullOrEmpty(article.Url))
+                        {
+                            bool exists = await _repository.EntryExistsByUrlAsync(article.Url);
+                            if (exists) continue;
+                        }
+
                         await _repository.SaveEntryAsync(
                             feed.Id,
                             article.Title,
@@ -43,7 +49,7 @@ namespace FeedGem.Services
                 catch (Exception ex)
                 {
                     // エラー時ログ
-                    LoggingService.Error($"フィード更新失敗: {feed.Title}", ex);
+                    LoggingService.Error($"フィード更新失敗: {feed.Title} ({feed.Url})", ex);
                 }
             });
 
@@ -77,13 +83,9 @@ namespace FeedGem.Services
                     }
                 }
 
-                // --- 取得 ---
-                var stream = await http.GetStreamAsync(targetUrl);
-
-                // --- 解析 ---
+                using var stream = await http.GetStreamAsync(targetUrl);
                 var articles = FeedParser.Parse(stream);
 
-                // --- 保存 ---
                 foreach (var article in articles)
                 {
                     if (!string.IsNullOrEmpty(article.Url))
