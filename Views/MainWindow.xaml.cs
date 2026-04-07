@@ -40,8 +40,8 @@ namespace FeedGem.Views
         private readonly FeedUpdateService _updateService;
         private readonly OpmlService _opmlService;
         private readonly UrlSubscriptionService _subscriptionService;
+        private readonly BackgroundUpdateTimer _backgroundTimer;
         // --- トレイ関連 ---
-        private readonly TrayIconManager? _trayManager;
         private readonly UnreadCountService _unreadService;
         private readonly NotificationService _notificationService;
         #endregion
@@ -89,7 +89,14 @@ namespace FeedGem.Views
 
             // バックグラウンドでの更新処理を開始
             _ = _updateService.UpdateAllAsync();
-            _ = StartBackgroundPollingAsync();
+            _backgroundTimer = new BackgroundUpdateTimer(
+                _updateService,
+                UpdateTrayIconAsync,
+                UpdateLastUpdateTime
+            );
+
+            // 1時間ごとに実行
+            _backgroundTimer.Start(TimeSpan.FromHours(1));
 
             _dragHandler = new TreeDragDropHandler(
                 _repository,
@@ -144,6 +151,7 @@ namespace FeedGem.Views
 
             int totalUnread = await _unreadService.GetTotalUnreadAsync();
             _notificationService.UpdateUnreadState(totalUnread);
+            _backgroundTimer?.Dispose();
         }
 
 
@@ -504,21 +512,6 @@ namespace FeedGem.Views
             return null;
         }
         #endregion
-
-        // バックグラウンドでの定期巡回タスクを開始する
-        private async Task StartBackgroundPollingAsync()
-        {
-            // 1時間間隔の非同期タイマーを生成
-            using var timer = new PeriodicTimer(TimeSpan.FromHours(1));
-
-            // タイマーのチック発生ごとにループを実行
-            while (await timer.WaitForNextTickAsync())
-            {
-                await _updateService.UpdateAllAsync();
-                await UpdateTrayIconAsync();
-                UpdateLastUpdateTime();
-            }
-        }
 
         // フォルダ階層を考慮してフィード一覧を表示する
         private async Task LoadFeedsToTreeViewAsync()
