@@ -7,7 +7,7 @@ namespace FeedGem.Models
     public class ArticleItem : INotifyPropertyChanged
     {
         private string _title = "";
-        private string _date = "";
+        private DateTime _date = DateTime.Now;
         private string _url = "";
         private string _summary = "";
         private string _feedTitle = "";
@@ -20,12 +20,24 @@ namespace FeedGem.Models
             set { if (_title != value) { _title = value; OnPropertyChanged(); } }
         }
 
-        // 投稿日時
-        public string Date
+        // 内部計算用のDateTime型
+        public DateTime Date
         {
             get => _date;
-            set { if (_date != value) { _date = value; OnPropertyChanged(); } }
+            set
+            {
+                if (_date != value)
+                {
+                    _date = value;
+                    OnPropertyChanged();
+                    // Dateが変わったら、表示用のDisplayDateも変わったことを通知する
+                    OnPropertyChanged(nameof(DisplayDate));
+                }
+            }
         }
+
+        // UI（画面）の表示に使うための専用プロパティ
+        public string DisplayDate => Date.ToString("yyyy/MM/dd HH:mm");
 
         // 記事URL
         public string Url
@@ -41,7 +53,7 @@ namespace FeedGem.Models
             set { if (_summary != value) { _summary = value; OnPropertyChanged(); } }
         }
 
-        // 購読サイト名（今回追加した2行目表示用）
+        // 購読サイト名（2行目表示用）
         public string FeedTitle
         {
             get => _feedTitle;

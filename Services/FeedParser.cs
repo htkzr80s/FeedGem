@@ -73,17 +73,17 @@ namespace FeedGem.Services
             }
 
             // 日付
-            DateTimeOffset pubDate =
-                item.PublishDate != default ? item.PublishDate :
-                item.LastUpdatedTime != default ? item.LastUpdatedTime :
-                DateTimeOffset.Now;
+            DateTime pubDate =
+                item.PublishDate != default ? item.PublishDate.DateTime :
+                item.LastUpdatedTime != default ? item.LastUpdatedTime.DateTime :
+                DateTime.Now;
 
             return new ArticleItem
             {
                 Title = title,
                 Url = link,
                 Summary = summary,
-                Date = pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
+                Date = pubDate
             };
         }
 
@@ -112,9 +112,9 @@ namespace FeedGem.Services
 
                 string dateVal = node.Element(dc + "date")?.Value ?? "";
 
-                string published = DateTimeOffset.TryParse(dateVal, out var parsed)
-                    ? parsed.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
-                    : DateTime.Now.ToString("yyyy/MM/dd HH:mm");
+                DateTime published = DateTimeOffset.TryParse(dateVal, out var parsed)
+                    ? parsed.DateTime
+                    : DateTime.Now;
 
                 list.Add(new ArticleItem
                 {

@@ -112,7 +112,7 @@ namespace FeedGem.Data
                 articles.Add(new ArticleItem
                 {
                     Title = reader.GetString(0),
-                    Date = reader.GetString(1),
+                    Date = reader.GetDateTime(1),
                     Url = reader.GetString(2),
                     Summary = reader.IsDBNull(3) ? "" : reader.GetString(3),
                     IsRead = reader.GetInt32(4) == 1,
@@ -155,7 +155,7 @@ namespace FeedGem.Data
         }
 
         // 記事データを保存する
-        public async Task SaveEntryAsync(long feedId, string title, string url, string summary, string pubDate)
+        public async Task SaveEntryAsync(long feedId, string title, string url, string summary, DateTime pubDate)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
