@@ -17,23 +17,18 @@ namespace FeedGem.Services
         // すべてのフィードを巡回して最新記事を取得・保存する
         public async Task UpdateAllFeedsAsync()
         {
-            // 登録されている全フィードを取得
             var feeds = await _repository.GetAllFeedsAsync();
-
-            // HttpClient共有
             var http = HttpClientProvider.Client;
+            var semaphore = new SemaphoreSlim(5);
 
-            foreach (var feed in feeds)
+            var tasks = feeds.Select(async feed =>
             {
+                await semaphore.WaitAsync();
                 try
                 {
-                    // フィード取得
                     var stream = await http.GetStreamAsync(feed.Url);
-
-                    // パース
                     var articles = FeedParser.Parse(stream);
 
-                    // 保存
                     foreach (var article in articles)
                     {
                         await _repository.SaveEntryAsync(
@@ -50,7 +45,9 @@ namespace FeedGem.Services
                     // エラー時ログ
                     LoggingService.Error($"フィード更新失敗: {feed.Title}", ex);
                 }
-            }
+            });
+
+            await Task.WhenAll(tasks);
 
             // 古い記事の削除
             await _repository.DeleteOldEntriesAsync();
