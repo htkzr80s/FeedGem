@@ -135,6 +135,7 @@ namespace FeedGem.Views
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             _notificationService?.Dispose();
+            _backgroundTimer?.Dispose();
         }
 
         // 未読アイコン更新
@@ -144,7 +145,6 @@ namespace FeedGem.Views
 
             int totalUnread = await _unreadService.GetTotalUnreadAsync();
             _notificationService.UpdateUnreadState(totalUnread);
-            _backgroundTimer?.Dispose();
         }
 
 

@@ -22,6 +22,7 @@ namespace FeedGem.Services
             try
             {
                 var http = HttpClientProvider.Client;
+                http.Timeout = TimeSpan.FromSeconds(10);
 
                 var stream = await http.GetStreamAsync(url);
                 using var reader = XmlReader.Create(stream);
@@ -47,7 +48,10 @@ namespace FeedGem.Services
                     return candidates;
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LoggingService.Error($"Discovery: 直接URL取得失敗: {url}", ex);
+            }
 
             // 2. HTML内からフィードURLを探す
             try
@@ -122,7 +126,10 @@ namespace FeedGem.Services
                     }
                 }
             }
-            catch { /* 次のHTML解析へ */ }
+            catch (Exception ex)
+            {
+                LoggingService.Error($"Discovery: HTML解析失敗: {url}", ex);
+            }
 
             // 3. よくあるフィードURLを推測して試す
             var commonPaths = new[]
@@ -140,10 +147,12 @@ namespace FeedGem.Services
 
             foreach (var path in commonPaths)
             {
+                Uri? testUri = null; // ← ここで1回だけ宣言
+
                 try
                 {
                     Uri baseUri = new(url);
-                    Uri testUri = new(baseUri, path);
+                    testUri = new(baseUri, path); // ← 宣言じゃなく代入にする
 
                     var http = HttpClientProvider.Client;
 
@@ -156,7 +165,7 @@ namespace FeedGem.Services
                     {
                         string feedType = "Unknown";
 
-                        // URLベースで補助判定（確実）
+                        // URLベースで補助判定
                         string lowerUrl = testUri.AbsoluteUri.ToLower();
 
                         if (lowerUrl.Contains("atom"))
@@ -185,7 +194,8 @@ namespace FeedGem.Services
                 }
                 catch (Exception ex)
                 {
-                    LoggingService.Error("探索エラー", ex);
+                    string failedUrl = testUri?.AbsoluteUri ?? $"{url}{path}";
+                    LoggingService.Error($"Discovery: 推測URL失敗: {failedUrl}", ex);
                 }
             }
             return candidates;

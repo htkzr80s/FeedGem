@@ -125,10 +125,29 @@ namespace FeedGem.Data
             // 取得したレコードをコレクションに追加
             while (await reader.ReadAsync())
             {
+                // published_dateを安全に取得
+                DateTime date;
+                if (reader.IsDBNull(1))
+                {
+                    date = DateTime.MinValue;
+                }
+                else
+                {
+                    var raw = reader.GetString(1);
+
+                    // パース失敗時は安全値にフォールバック
+                    if (!DateTime.TryParse(raw, out date))
+                    {
+                        Console.WriteLine($"[Warn] 日付パース失敗: {raw}");
+                        date = DateTime.MinValue;
+                    }
+                }
+
+                // 記事データ生成
                 articles.Add(new ArticleItem
                 {
                     Title = reader.GetString(0),
-                    Date = reader.GetDateTime(1),
+                    Date = date,
                     Url = reader.GetString(2),
                     Summary = reader.IsDBNull(3) ? "" : reader.GetString(3),
                     IsRead = reader.GetInt32(4) == 1,
@@ -177,7 +196,14 @@ namespace FeedGem.Data
             command.Parameters.AddWithValue("@summary", summary);
             command.Parameters.AddWithValue("@pubDate", pubDate);
 
-            await command.ExecuteNonQueryAsync();
+            // INSERT実行
+            var rows = await command.ExecuteNonQueryAsync();
+
+            // 挿入されなかった場合（重複など）
+            if (rows == 0)
+            {
+                Console.WriteLine($"[Info] 既存記事のためスキップ: {url}");
+            }
         }
 
         // 記事を既読状態（is_read = 1）に更新する
@@ -364,6 +390,28 @@ namespace FeedGem.Data
             await deleteCmd.ExecuteNonQueryAsync();
         }
 
+        // 指定フィードの既存記事URL一覧を取得する
+        public async Task<HashSet<string>> GetEntryUrlsAsync(long feedId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string query = "SELECT url FROM entries WHERE feed_id = @feedId";
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@feedId", feedId);
+
+            using var reader = await command.ExecuteReaderAsync();
+
+            var urls = new HashSet<string>();
+
+            // URL一覧をHashSetに格納（高速検索用）
+            while (await reader.ReadAsync())
+            {
+                urls.Add(reader.GetString(0));
+            }
+
+            return urls;
+        }
     }
 
     // 内部管理用のシンプルなクラス

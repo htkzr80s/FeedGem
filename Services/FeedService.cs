@@ -83,6 +83,9 @@ namespace FeedGem.Services
                     .Take(30)
                     .ToList();
 
+                // --- 既存URL一覧を事前取得 ---
+                var existingUrls = await _repository.GetEntryUrlsAsync(feedId);
+
                 foreach (var article in articles)
                 {
                     await _repository.SaveEntryAsync(

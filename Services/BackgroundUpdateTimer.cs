@@ -19,6 +19,7 @@ namespace FeedGem.Services
         // タイマー開始
         public void Start(TimeSpan interval)
         {
+            Dispose(); // 既存停止
             _cts = new CancellationTokenSource();
             _timer = new PeriodicTimer(interval);
 
@@ -32,15 +33,23 @@ namespace FeedGem.Services
             {
                 while (await _timer!.WaitForNextTickAsync(token))
                 {
-                    // フィード更新
-                    await _updateService.UpdateAllAsync();
+                    try
+                    {
+                        // フィード更新
+                        await _updateService.UpdateAllAsync();
 
-                    // トレイ更新など（非同期）
-                    if (_onAfterUpdateAsync != null)
-                        await _onAfterUpdateAsync();
+                        // トレイ更新など（非同期）
+                        if (_onAfterUpdateAsync != null)
+                            await _onAfterUpdateAsync();
 
-                    // UIの時刻更新など（同期）
-                    _onTick?.Invoke();
+                        // UIの時刻更新など（同期）
+                        _onTick?.Invoke();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[Error] {ex.GetType().Name}: {ex.Message}");
+                        Console.WriteLine(ex.StackTrace);
+                    }
                 }
             }
             catch (OperationCanceledException)
