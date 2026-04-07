@@ -19,7 +19,7 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
-            string createTableQuery = @"
+            string createTableQuery = """
                 CREATE TABLE IF NOT EXISTS feeds (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     folder_path TEXT NOT NULL DEFAULT '/',
@@ -35,24 +35,39 @@ namespace FeedGem.Data
                     published_date TEXT,
                     is_read INTEGER DEFAULT 0,
                     FOREIGN KEY(feed_id) REFERENCES feeds(id)
-                );";
+                );
+                """;
+
             using var command = new SqliteCommand(createTableQuery, connection);
             command.ExecuteNonQuery();
 
-            // 既存テーブルへのカラム追加（既に存在する場合はエラーになるため無視する）
+            // 既存テーブルへのカラム追加
             try
             {
                 using var alterCommand = new SqliteCommand("ALTER TABLE feeds ADD COLUMN sort_order INTEGER DEFAULT 0;", connection);
                 alterCommand.ExecuteNonQuery();
             }
-            catch { /* 無視 */ }
+            catch (SqliteException ex)
+            {
+                // カラムが既に存在する場合のエラー(SQLITE_ERROR)は無視し、それ以外を記録する
+                if (ex.SqliteErrorCode != 1)
+                {
+                    Console.WriteLine($"[Error] sort_orderの追加に失敗しました: {ex.Message}");
+                }
+            }
 
             try
             {
                 using var alterFolderCommand = new SqliteCommand("ALTER TABLE feeds ADD COLUMN folder_path TEXT NOT NULL DEFAULT '/';", connection);
                 alterFolderCommand.ExecuteNonQuery();
             }
-            catch { /* 無視 */ }
+            catch (SqliteException ex)
+            {
+                if (ex.SqliteErrorCode != 1)
+                {
+                    Console.WriteLine($"[Error] folder_pathの追加に失敗しました: {ex.Message}");
+                }
+            }
         }
 
         // 購読中のフィード一覧を取得する
@@ -75,7 +90,7 @@ namespace FeedGem.Data
                     FolderPath = reader.GetString(1),
                     Title = reader.GetString(2),
                     Url = reader.GetString(3),
-                    SortOrder = reader.GetInt32(4) // sort_orderを読み込む
+                    SortOrder = reader.GetInt32(4)
                 });
             }
             return feeds;
@@ -89,18 +104,19 @@ namespace FeedGem.Data
             await connection.OpenAsync();
 
             // 日付の降順で記事を取得
-            string query = @"
-            SELECT 
-                e.title, 
-                e.published_date, 
-                e.url, 
-                e.summary, 
-                e.is_read, 
-                f.title
-            FROM entries e
-            JOIN feeds f ON e.feed_id = f.id
-            WHERE e.feed_id = @feedId
-            ORDER BY e.published_date DESC";
+            string query = """
+                SELECT 
+                    e.title, 
+                    e.published_date, 
+                    e.url, 
+                    e.summary, 
+                    e.is_read, 
+                    f.title
+                FROM entries e
+                JOIN feeds f ON e.feed_id = f.id
+                WHERE e.feed_id = @feedId
+                ORDER BY e.published_date DESC
+                """;
 
             using var command = new SqliteCommand(query, connection);
             command.Parameters.AddWithValue("@feedId", feedId);
@@ -128,29 +144,19 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 同じURLが既に登録されていないか事前に確認する
-            var checkCmd = connection.CreateCommand();
-            checkCmd.CommandText = "SELECT id FROM feeds WHERE url = $url LIMIT 1;"; // URLで検索
-            checkCmd.Parameters.AddWithValue("$url", url);
-            var existingId = await checkCmd.ExecuteScalarAsync();
+            // INSERT OR IGNOREを使用して事前チェックと挿入を1回のクエリに統合
+            string query = """
+                INSERT OR IGNORE INTO feeds (folder_path, title, url)
+                VALUES (@folder, @title, @url);
+                SELECT id FROM feeds WHERE url = @url;
+                """;
 
-            // 既に存在する場合はそのIDを返して処理を抜ける（重複エラーを防止）
-            if (existingId != null)
-            {
-                return (long)existingId;
-            }
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@folder", folder);
+            command.Parameters.AddWithValue("@title", title);
+            command.Parameters.AddWithValue("@url", url);
 
-            // 重複がない場合のみ新規登録を実行する
-            var insertCmd = connection.CreateCommand();
-            insertCmd.CommandText = @"
-                INSERT INTO feeds (folder_path, title, url)
-                VALUES ($folder, $title, $url);
-                SELECT last_insert_rowid();"; // 挿入と同時に新しいIDを取得
-            insertCmd.Parameters.AddWithValue("$folder", folder);
-            insertCmd.Parameters.AddWithValue("$title", title);
-            insertCmd.Parameters.AddWithValue("$url", url);
-
-            var result = await insertCmd.ExecuteScalarAsync();
+            var result = await command.ExecuteScalarAsync();
             return (long)(result ?? 0);
         }
 
@@ -160,8 +166,10 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            string insertQuery = @"INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
-                                 VALUES (@feedId, @title, @url, @summary, @pubDate)";
+            string insertQuery = """
+                INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
+                VALUES (@feedId, @title, @url, @summary, @pubDate)
+                """;
             using var command = new SqliteCommand(insertQuery, connection);
             command.Parameters.AddWithValue("@feedId", feedId);
             command.Parameters.AddWithValue("@title", title);
@@ -170,19 +178,6 @@ namespace FeedGem.Data
             command.Parameters.AddWithValue("@pubDate", pubDate);
 
             await command.ExecuteNonQueryAsync();
-        }
-        // URLで記事の存在チェック
-        public async Task<bool> EntryExistsByUrlAsync(string url)
-        {
-            using var conn = new Microsoft.Data.Sqlite.SqliteConnection(_connectionString);
-            await conn.OpenAsync();
-
-            var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT 1 FROM entries WHERE url = @url LIMIT 1";
-            cmd.Parameters.AddWithValue("@url", url);
-
-            var result = await cmd.ExecuteScalarAsync();
-            return result != null;
         }
 
         // 記事を既読状態（is_read = 1）に更新する
@@ -306,13 +301,14 @@ namespace FeedGem.Data
                 string folderName = folderPath.TrimStart('/').Split('/').Last();
 
                 // --- 1. 記事削除 ---
-                string deleteEntries = @"
-            DELETE FROM entries 
-            WHERE feed_id IN (
-                SELECT id FROM feeds 
-                WHERE folder_path = @path 
-                   OR folder_path LIKE @childPath
-            )";
+                string deleteEntries = """
+                    DELETE FROM entries 
+                    WHERE feed_id IN (
+                        SELECT id FROM feeds 
+                        WHERE folder_path = @path 
+                           OR folder_path LIKE @childPath
+                    )
+                    """;
 
                 using (var cmd1 = new SqliteCommand(deleteEntries, connection, transaction))
                 {
@@ -322,12 +318,13 @@ namespace FeedGem.Data
                 }
 
                 // --- 2. フィード削除（フォルダ本体も含む） ---
-                string deleteFeeds = @"
-            DELETE FROM feeds 
-            WHERE 
-                folder_path = @path 
-                OR folder_path LIKE @childPath
-                OR (title = @folderName AND url LIKE 'folder://%')";
+                string deleteFeeds = """
+                    DELETE FROM feeds 
+                    WHERE 
+                        folder_path = @path 
+                        OR folder_path LIKE @childPath
+                        OR (title = @folderName AND url LIKE 'folder://%')
+                    """;
 
                 using (var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction))
                 {
@@ -352,34 +349,19 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 全フィードのIDを取得
-            var feedIds = new List<long>();
-            using (var getFeedsCmd = new SqliteCommand("SELECT id FROM feeds", connection))
-            using (var reader = await getFeedsCmd.ExecuteReaderAsync())
-            {
-                while (await reader.ReadAsync())
-                {
-                    feedIds.Add(reader.GetInt64(0));
-                }
-            }
+            // ROW_NUMBER関数を使用して、各フィードの最新30件以外を一括削除する
+            string deleteQuery = """
+                DELETE FROM entries 
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY published_date DESC) as rn 
+                        FROM entries
+                    ) WHERE rn > 30
+                )
+                """;
 
-            // 各フィードごとに、最新20件以外を削除する
-            foreach (var feedId in feedIds)
-            {
-                string deleteQuery = @"
-                    DELETE FROM entries 
-                    WHERE feed_id = @feedId 
-                    AND id NOT IN (
-                        SELECT id FROM entries 
-                        WHERE feed_id = @feedId 
-                        ORDER BY published_date DESC 
-                        LIMIT 30
-                    );";
-
-                using var deleteCmd = new SqliteCommand(deleteQuery, connection);
-                deleteCmd.Parameters.AddWithValue("@feedId", feedId);
-                await deleteCmd.ExecuteNonQueryAsync();
-            }
+            using var deleteCmd = new SqliteCommand(deleteQuery, connection);
+            await deleteCmd.ExecuteNonQueryAsync();
         }
 
     }

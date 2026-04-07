@@ -51,13 +51,6 @@ namespace FeedGem.Views
         public MainWindow()
         {
             InitializeComponent();
-
-            // 画面が表示された後に実行する
-            // this.Loaded += (s, e) =>
-            // {
-            //     TestArea.Run();
-            // };
-
             SetupWindowIcon();
 
             // リポジトリを初期化（ファイルパスを指定）

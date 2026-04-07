@@ -31,12 +31,6 @@ namespace FeedGem.Services
 
                     foreach (var article in articles)
                     {
-                        if (!string.IsNullOrEmpty(article.Url))
-                        {
-                            bool exists = await _repository.EntryExistsByUrlAsync(article.Url);
-                            if (exists) continue;
-                        }
-
                         await _repository.SaveEntryAsync(
                             feed.Id,
                             article.Title,
@@ -84,16 +78,13 @@ namespace FeedGem.Services
                 }
 
                 using var stream = await http.GetStreamAsync(targetUrl);
-                var articles = FeedParser.Parse(stream);
+                var articles = FeedParser.Parse(stream)
+                    .OrderByDescending(a => a.Date)
+                    .Take(30)
+                    .ToList();
 
                 foreach (var article in articles)
                 {
-                    if (!string.IsNullOrEmpty(article.Url))
-                    {
-                        bool exists = await _repository.EntryExistsByUrlAsync(article.Url);
-                        if (exists) continue;
-                    }
-
                     await _repository.SaveEntryAsync(
                         feedId,
                         article.Title,
@@ -102,6 +93,7 @@ namespace FeedGem.Services
                         article.Date
                     );
                 }
+                await _repository.DeleteOldEntriesAsync();
             }
             catch (Exception ex)
             {

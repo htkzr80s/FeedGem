@@ -14,10 +14,15 @@ namespace FeedGem.Services
         // フィード解析（RSS / Atom / RDF）
         public static List<ArticleItem> Parse(Stream stream)
         {
+            // --- ストリームをメモリにコピー ---
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+
+            // --- 1回目：RSS / Atom ---
             try
             {
-                // --- RSS / Atom ---
-                using var reader = XmlReader.Create(stream);
+                ms.Position = 0;
+                using var reader = XmlReader.Create(ms);
                 var feed = SyndicationFeed.Load(reader);
 
                 if (feed != null)
@@ -30,8 +35,9 @@ namespace FeedGem.Services
                 // 無視してRDFへ
             }
 
-            // --- RDF (FC2など) ---
-            return ParseRdf(stream);
+            // --- 2回目：RDF ---
+            ms.Position = 0;
+            return ParseRdf(ms);
         }
 
         // RSS / Atom の1記事解析
@@ -92,12 +98,15 @@ namespace FeedGem.Services
         {
             var list = new List<ArticleItem>();
 
-            var doc = XDocument.Load(stream);
+            // ストリームの読み取り位置を先頭に戻す
+            if (stream.CanSeek) stream.Position = 0;
 
+            var doc = XDocument.Load(stream);
             XNamespace ns = "http://purl.org/rss/1.0/";
             XNamespace dc = "http://purl.org/dc/elements/1.1/";
 
-            var items = doc.Descendants(ns + "item");
+            // channel内のitems/Seqではなく、ルート直下のitem要素を直接取得する
+            var items = doc.Root?.Elements(ns + "item") ?? doc.Descendants(ns + "item");
 
             foreach (var node in items)
             {
