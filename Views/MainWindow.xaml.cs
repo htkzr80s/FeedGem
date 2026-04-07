@@ -261,8 +261,10 @@ namespace FeedGem.Views
                                 var secondResult = await _subscriptionService.AddFeedAsync(selected);
 
                                 if (secondResult == SubscribeResult.Success)
+                                {
                                     LogTextBlock.Text = "フィードを追加しました。";
                                     await LoadFeedsToTreeViewAsync();
+                                }
                             }
                         }
                         break;

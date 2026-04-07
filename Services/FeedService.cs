@@ -20,52 +20,34 @@ namespace FeedGem.Services
             // 登録されている全フィードを取得
             var feeds = await _repository.GetAllFeedsAsync();
 
+            // HttpClient共有
+            var http = HttpClientProvider.Client;
+
             foreach (var feed in feeds)
             {
                 try
                 {
-                    // HttpClient共有インスタンス取得
-                    var http = HttpClientProvider.Client;
-
-                    // フィードをストリームとして取得
+                    // フィード取得
                     var stream = await http.GetStreamAsync(feed.Url);
 
-                    // XMLとして読み込み
-                    using var reader = XmlReader.Create(stream);
-                    var rssData = SyndicationFeed.Load(reader);
+                    // パース
+                    var articles = FeedParser.Parse(stream);
 
-                    if (rssData == null) continue;
-
-                    // 記事を一つずつチェックして保存
-                    foreach (var item in rssData.Items)
+                    // 保存
+                    foreach (var article in articles)
                     {
-                        // タイトルが空の場合の対策
-                        string title = item.Title?.Text ?? "無題";
-
-                        // URL取得
-                        string url = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-
-                        // 概要取得
-                        string summary = item.Summary?.Text ?? "";
-
-                        // 日付安全取得
-                        DateTimeOffset pubDate =
-                            item.PublishDate != default ? item.PublishDate :
-                            item.LastUpdatedTime != default ? item.LastUpdatedTime :
-                            DateTimeOffset.Now;
-
-                        // DB保存
                         await _repository.SaveEntryAsync(
                             feed.Id,
-                            title,
-                            url,
-                            summary,
-                            pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm")
+                            article.Title,
+                            article.Url,
+                            article.Summary,
+                            article.Date
                         );
                     }
                 }
                 catch (Exception ex)
                 {
+                    // エラー時ログ
                     LoggingService.Error($"フィード更新失敗: {feed.Title}", ex);
                 }
             }
@@ -81,14 +63,15 @@ namespace FeedGem.Services
 
             try
             {
-                // サイトごとのURL補正
+                // --- URL補正 ---
                 string targetUrl = SiteUrlHelper.Normalize(url);
 
+                // FC2対策
                 if (url.Contains("blog.fc2.com"))
                 {
-                    if (!url.Contains("?xml"))
+                    if (!targetUrl.Contains("?xml"))
                     {
-                        targetUrl = url.TrimEnd('/') + "/?xml";
+                        targetUrl = targetUrl.TrimEnd('/') + "/?xml";
                     }
 
                     if (!targetUrl.Contains("&all"))
@@ -97,147 +80,28 @@ namespace FeedGem.Services
                     }
                 }
 
+                // --- 取得 ---
                 var stream = await http.GetStreamAsync(targetUrl);
 
-                try
+                // --- 解析 ---
+                var articles = FeedParser.Parse(stream);
+
+                // --- 保存 ---
+                foreach (var article in articles)
                 {
-                    // --- 通常の RSS 2.0 / Atom 形式の解析 ---
-                    using var reader = XmlReader.Create(stream);
-                    var feed = System.ServiceModel.Syndication.SyndicationFeed.Load(reader);
-
-                    if (feed != null)
+                    if (!string.IsNullOrEmpty(article.Url))
                     {
-                        foreach (var item in feed.Items)
-                        {
-                            string title = item.Title?.Text ?? "";
-                            string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-
-                            // 本文取得（優先順位つき）
-                            string summary = "";
-
-                            // ① content:encoded（最優先）
-                            var encodedExt = item.ElementExtensions
-                                .FirstOrDefault(e => e.OuterName == "encoded" || e.OuterName == "content");
-
-                            if (encodedExt != null)
-                            {
-                                try
-                                {
-                                    using var readerExt = encodedExt.GetReader();
-                                    var element = System.Xml.Linq.XElement.Load(readerExt);
-                                    summary = element.Value;
-                                }
-                                catch { }
-                            }
-
-                            // ② Content（次）
-                            if (string.IsNullOrEmpty(summary) && item.Content is System.ServiceModel.Syndication.TextSyndicationContent contentObj)
-                            {
-                                summary = contentObj.Text;
-                            }
-
-                            // ③ Summary（最後）
-                            if (string.IsNullOrEmpty(summary))
-                            {
-                                summary = item.Summary?.Text ?? "";
-                            }
-
-                            // ④ それでも空ならリンク
-                            if (string.IsNullOrEmpty(summary))
-                            {
-                                string fallbackLink = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
-                                summary = $"<a href='{fallbackLink}'>記事を開く</a>";
-                            }
-                            if (encodedExt != null)
-                            {
-                                try
-                                {
-                                    using var extReader = encodedExt.GetReader();
-                                    var element = System.Xml.Linq.XElement.Load(extReader);
-                                    summary = element.Value;
-                                }
-                                catch { }
-                            }
-                            if (string.IsNullOrEmpty(summary) && item.Content is System.ServiceModel.Syndication.TextSyndicationContent textContent)
-                            {
-                                summary = textContent.Text;
-                            }
-                            if (string.IsNullOrEmpty(summary))
-                            {
-                                summary = item.Summary?.Text ?? "";
-                            }
-                            if (string.IsNullOrEmpty(summary))
-                            {
-                                summary = $"<a href='{link}'>記事を開く</a>";
-                            }
-
-                            // 投稿日時の取得（日本時間に変換。ISO形式ではなく読みやすい形式へ）
-                            DateTimeOffset pubDate = item.PublishDate != default ? item.PublishDate :
-                                                   item.LastUpdatedTime != default ? item.LastUpdatedTime :
-                                                   DateTimeOffset.Now;
-                            string published = pubDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
-
-                            // URLベースの重複チェック
-                            if (!string.IsNullOrEmpty(url))
-                            {
-                                bool exists = await _repository.EntryExistsByUrlAsync(url);
-                                if (exists)
-                                {
-                                    continue; // 既存記事はスキップ
-                                }
-                            }
-                            await _repository.SaveEntryAsync(feedId, title, link, summary, published);
-                        }
-                        return;
+                        bool exists = await _repository.EntryExistsByUrlAsync(article.Url);
+                        if (exists) continue;
                     }
-                }
-                catch
-                {
-                    // --- FC2ブログ等の RSS 1.0 (RDF) 形式の解析 ---
-                    // ストリームを先頭に戻して再読み込み
-                    var stream2 = await http.GetStreamAsync(targetUrl);
-                    var doc = System.Xml.Linq.XDocument.Load(stream2);
 
-                    // RSS 1.0 と Dublin Core (日付用) の名前空間を定義
-                    System.Xml.Linq.XNamespace ns = "http://purl.org/rss/1.0/";
-                    System.Xml.Linq.XNamespace dc = "http://purl.org/dc/elements/1.1/";
-
-                    // <item> タグを抽出
-                    var items = doc.Descendants(ns + "item");
-                    foreach (var node in items)
-                    {
-                        string title = node.Element(ns + "title")?.Value ?? "";
-                        string link = node.Element(ns + "link")?.Value ?? "";
-                        string desc = node.Element(ns + "description")?.Value ?? "";
-
-                        if (string.IsNullOrEmpty(desc))
-                        {
-                            desc = $"<a href='{link}'>記事を開く</a>";
-                        }
-
-                        // FC2の日付（dc:date）を解析。失敗した時だけ現在時刻にする
-                        string dateVal = node.Element(dc + "date")?.Value ?? "";
-                        string published;
-                        if (DateTimeOffset.TryParse(dateVal, out var parsedDate))
-                        {
-                            published = parsedDate.LocalDateTime.ToString("yyyy/MM/dd HH:mm");
-                        }
-                        else
-                        {
-                            published = DateTime.Now.ToString("yyyy/MM/dd HH:mm");
-                        }
-
-                        // URLベースの重複チェック
-                        if (!string.IsNullOrEmpty(url))
-                        {
-                            bool exists = await _repository.EntryExistsByUrlAsync(url);
-                            if (exists)
-                            {
-                                continue; // 既存記事はスキップ
-                            }
-                        }
-                        await _repository.SaveEntryAsync(feedId, title, link, desc, published);
-                    }
+                    await _repository.SaveEntryAsync(
+                        feedId,
+                        article.Title,
+                        article.Url,
+                        article.Summary,
+                        article.Date
+                    );
                 }
             }
             catch (Exception ex)
