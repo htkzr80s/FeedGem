@@ -61,21 +61,7 @@ namespace FeedGem.Services
             try
             {
                 // --- URL補正 ---
-                string targetUrl = SiteUrlHelper.Normalize(url);
-
-                // FC2対策
-                if (url.Contains("blog.fc2.com"))
-                {
-                    if (!targetUrl.Contains("?xml"))
-                    {
-                        targetUrl = targetUrl.TrimEnd('/') + "/?xml";
-                    }
-
-                    if (!targetUrl.Contains("&all"))
-                    {
-                        targetUrl += "&all";
-                    }
-                }
+                string targetUrl = FeedUrlNormalizer.Normalize(url);
 
                 using var stream = await http.GetStreamAsync(targetUrl);
                 var articles = FeedParser.Parse(stream)
