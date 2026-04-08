@@ -41,6 +41,14 @@ namespace FeedGem.Data
             using var command = new SqliteCommand(createTableQuery, connection);
             command.ExecuteNonQuery();
 
+            // FeedId検索を高速化するインデックス
+            using var indexCommand = new SqliteCommand("""
+                CREATE INDEX IF NOT EXISTS idx_entries_feedid 
+                ON entries(feed_id);
+            """, connection);
+
+            indexCommand.ExecuteNonQuery();
+
             // 既存テーブルへのカラム追加
             try
             {
@@ -219,6 +227,33 @@ namespace FeedGem.Data
             await command.ExecuteNonQueryAsync();
         }
 
+        // 指定フォルダ配下のすべての記事を既読にする
+        public async Task MarkFolderAsReadAsync(string folderPath)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // 子フォルダも含めるパターン
+            string childPattern = folderPath + "/%";
+
+            string updateQuery = """
+                UPDATE entries
+                SET is_read = 1
+                WHERE feed_id IN (
+                    SELECT id FROM feeds
+                    WHERE 
+                        (folder_path = @path OR folder_path LIKE @child)
+                        AND url NOT LIKE 'folder://%'
+                )
+            """;
+
+            using var command = new SqliteCommand(updateQuery, connection);
+            command.Parameters.AddWithValue("@path", folderPath);
+            command.Parameters.AddWithValue("@child", childPattern);
+
+            await command.ExecuteNonQueryAsync();
+        }
+
         // 指定したフィードの未読記事数を取得する
         public async Task<int> GetUnreadCountAsync(long feedId)
         {
@@ -261,6 +296,24 @@ namespace FeedGem.Data
             using var command = new SqliteCommand(updateQuery, connection);
             command.Parameters.AddWithValue("@sortOrder", sortOrder);
             command.Parameters.AddWithValue("@id", id);
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        // 指定フィードの全記事を既読にする（一括更新）
+        public async Task MarkAllAsReadAsync(long feedId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE Entries
+                SET is_read = 1
+                WHERE feed_id = @feedId;
+                """;
+
+            command.Parameters.AddWithValue("@feedId", feedId);
 
             await command.ExecuteNonQueryAsync();
         }
@@ -358,6 +411,69 @@ namespace FeedGem.Data
                     cmd2.Parameters.AddWithValue("@childPath", childPath);
                     cmd2.Parameters.AddWithValue("@folderName", folderName);
                     await cmd2.ExecuteNonQueryAsync();
+                }
+
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        // フォルダ名を変更する（配下すべて含む）
+        public async Task RenameFolderAsync(string folderPath, string newName)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            using var transaction = connection.BeginTransaction();
+
+            try
+            {
+                // 新しいルートパス
+                string newRoot = "/" + newName;
+
+                // 子フォルダ用
+                string childPattern = folderPath + "/%";
+
+                // --- 1. フィードのパス更新 ---
+                string updateFeeds = """
+                    UPDATE feeds
+                    SET folder_path = 
+                        CASE
+                            WHEN folder_path = @old THEN @new
+                            WHEN folder_path LIKE @child THEN 
+                                @new || SUBSTR(folder_path, LENGTH(@old) + 1)
+                        END
+                    WHERE folder_path = @old OR folder_path LIKE @child
+                """;
+
+                using (var cmd = new SqliteCommand(updateFeeds, connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@old", folderPath);
+                    cmd.Parameters.AddWithValue("@new", newRoot);
+                    cmd.Parameters.AddWithValue("@child", childPattern);
+
+                    await cmd.ExecuteNonQueryAsync();
+                }
+
+                // --- 2. ダミーフォルダ更新 ---
+                string folderName = folderPath.TrimStart('/').Split('/').Last();
+
+                string updateDummy = """
+                    UPDATE feeds
+                    SET title = @newName
+                    WHERE title = @oldName AND url LIKE 'folder://%'
+                """;
+
+                using (var cmd = new SqliteCommand(updateDummy, connection, transaction))
+                {
+                    cmd.Parameters.AddWithValue("@newName", newName);
+                    cmd.Parameters.AddWithValue("@oldName", folderName);
+
+                    await cmd.ExecuteNonQueryAsync();
                 }
 
                 await transaction.CommitAsync();

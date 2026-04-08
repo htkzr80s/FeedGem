@@ -83,9 +83,6 @@ namespace FeedGem.Services
                     .Take(30)
                     .ToList();
 
-                // --- 既存URL一覧を事前取得 ---
-                var existingUrls = await _repository.GetEntryUrlsAsync(feedId);
-
                 foreach (var article in articles)
                 {
                     await _repository.SaveEntryAsync(
@@ -96,7 +93,6 @@ namespace FeedGem.Services
                         article.Date
                     );
                 }
-                await _repository.DeleteOldEntriesAsync();
             }
             catch (Exception ex)
             {
@@ -107,32 +103,13 @@ namespace FeedGem.Services
         // 指定フィードをすべて既読にする
         public async Task MarkAllAsReadAsync(long feedId)
         {
-            var entries = await _repository.GetEntriesByFeedIdAsync(feedId);
-
-            foreach (var entry in entries)
-            {
-                await _repository.MarkAsReadAsync(entry.Url);
-            }
+            await _repository.MarkAllAsReadAsync(feedId);
         }
 
         // 指定したフォルダ内のすべてのフィード記事を既読にする
         public async Task MarkFolderAsReadAsync(string folderPath)
         {
-            var feeds = await _repository.GetAllFeedsAsync();
-
-            // 対象フォルダ内のフィードを抽出（前方一致でサブフォルダも含む）
-            var targetFeeds = feeds.Where(f => f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/"));
-
-            foreach (var feed in targetFeeds)
-            {
-                if (feed.Url.StartsWith("folder://")) continue;
-
-                var entries = await _repository.GetEntriesByFeedIdAsync(feed.Id);
-                foreach (var entry in entries)
-                {
-                    await _repository.MarkAsReadAsync(entry.Url);
-                }
-            }
+            await _repository.MarkFolderAsReadAsync(folderPath);
         }
 
         // フィード名変更
@@ -148,24 +125,7 @@ namespace FeedGem.Services
         // フォルダ名変更
         public async Task RenameFolderAsync(string folderPath, string newName)
         {
-            var feeds = await _repository.GetAllFeedsAsync();
-
-            string newPath = "/" + newName;
-
-            // フォルダ内フィード更新
-            foreach (var f in feeds.Where(f => f.FolderPath == folderPath))
-            {
-                await _repository.UpdateFeedAsync(f.Id, newPath, f.Title, f.Url);
-            }
-
-            // ダミーフォルダ更新
-            string currentName = folderPath.TrimStart('/');
-            var dummy = feeds.FirstOrDefault(f => f.Title == currentName && f.Url.StartsWith("folder://"));
-
-            if (dummy != null)
-            {
-                await _repository.UpdateFeedAsync(dummy.Id, "/", newName, dummy.Url);
-            }
+            await _repository.RenameFolderAsync(folderPath, newName);
         }
 
         // フィード削除
