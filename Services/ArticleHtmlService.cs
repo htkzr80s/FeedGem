@@ -1,34 +1,33 @@
 ﻿using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace FeedGem.Services
 {
-    public static class ArticleHtmlService
+    public static partial class ArticleHtmlService
     {
         private static readonly HttpClient _httpClient = new();
+
+        // scriptタグ削除用
+        [GeneratedRegex("<script[^>]*>.*?</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+        private static partial Regex ScriptTagRegex();
+
+        // FC2フッター削除用
+        [GeneratedRegex("<div class=\"fc2_footer\"[^>]*>.*?</div>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+        private static partial Regex Fc2FooterRegex();
 
         // 記事の内容をプレビュー用に装飾するHTMLを生成する
         public static string BuildPreviewHtml(string title, string content)
         {
             // --- HTMLデコード ---
-            string decoded = System.Net.WebUtility.HtmlDecode(content ?? "");
+            string decoded = WebUtility.HtmlDecode(content ?? "");
 
             // --- scriptタグ削除 ---
-            decoded = System.Text.RegularExpressions.Regex.Replace(
-                decoded,
-                "<script.*?</script>",
-                "",
-                System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
+            decoded = ScriptTagRegex().Replace(decoded, "");
 
             // --- FC2フッター削除 ---
-            decoded = System.Text.RegularExpressions.Regex.Replace(
-                decoded,
-                "<div class=\"fc2_footer\".*?</div>",
-                "",
-                System.Text.RegularExpressions.RegexOptions.Singleline | System.Text.RegularExpressions.RegexOptions.IgnoreCase
-            );
+            decoded = Fc2FooterRegex().Replace(decoded, "");
 
             // --- 改行補正（タグが少ない場合のみ） ---
             if (!decoded.Contains("<p") && !decoded.Contains("<br"))
@@ -43,7 +42,7 @@ namespace FeedGem.Services
                 : decoded;
 
             // --- HTML構築 ---
-            var sb = new System.Text.StringBuilder();
+            var sb = new StringBuilder();
             sb.Append("<!DOCTYPE html><html lang='ja'><head><meta charset='utf-8'>");
             sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
 
