@@ -1,11 +1,13 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 
 namespace FeedGem.Services
 {
     public static class LoggingService
     {
+        // 同時書き込み防止用ロック
+        private static readonly Lock _lock = new();
+
         private static readonly string LogFilePath = "log.txt";
 
         // 情報ログ
@@ -29,11 +31,14 @@ namespace FeedGem.Services
 
             try
             {
-                File.AppendAllText(LogFilePath, line + Environment.NewLine);
+                lock (_lock)
+                {
+                    File.AppendAllText(LogFilePath, line + Environment.NewLine);
+                }
             }
-            catch
+            catch (Exception ex)
             {
-                // ファイル書き込み失敗は無視
+                Debug.WriteLine($"[LOG ERROR] {ex.Message}");
             }
         }
     }

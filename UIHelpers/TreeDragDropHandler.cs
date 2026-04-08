@@ -1,16 +1,13 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using Input = System.Windows.Input;
-using WpfPoint = System.Windows.Point;
-using WpfDragEventArgs = System.Windows.DragEventArgs;
 using WpfDragDropEffects = System.Windows.DragDropEffects;
+using WpfDragEventArgs = System.Windows.DragEventArgs;
+using WpfPoint = System.Windows.Point;
 
 namespace FeedGem.UIHelpers
 {

@@ -1,8 +1,4 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-
-namespace FeedGem.Services
+﻿namespace FeedGem.Services
 {
     public class BackgroundUpdateTimer(
         FeedUpdateService updateService,

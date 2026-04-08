@@ -1,12 +1,6 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
-using FeedGem.Services;
-using FeedGem.Views;
-using System.Collections.Generic;
-using System.Linq;
 using System.ServiceModel.Syndication;
-using System.Threading.Tasks;
-using System.Windows;
 using System.Xml;
 
 namespace FeedGem.Services

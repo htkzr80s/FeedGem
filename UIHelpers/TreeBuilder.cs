@@ -1,7 +1,5 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 
 namespace FeedGem.UIHelpers
 {
@@ -96,7 +94,7 @@ namespace FeedGem.UIHelpers
         }
 
         // 子ノードの未読数を合計する
-        private int CalculateUnread(TreeNodeModel node)
+        private static int CalculateUnread(TreeNodeModel node)
         {
             int total = node.UnreadCount;
 

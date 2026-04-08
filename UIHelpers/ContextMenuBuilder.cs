@@ -2,18 +2,13 @@
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.Views;
-using Wpf = System.Windows.Controls;
-using WinForms = System.Windows.Forms;
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
-using Media = System.Windows.Media;
 using Input = System.Windows.Input;
+using Media = System.Windows.Media;
 using MsgBox = System.Windows.MessageBox;
+using Wpf = System.Windows.Controls;
 
 namespace FeedGem.UIHelpers
 {

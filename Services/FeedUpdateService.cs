@@ -1,8 +1,4 @@
 ﻿using FeedGem.Data;
-using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace FeedGem.Services
 {
@@ -16,18 +12,32 @@ namespace FeedGem.Services
         {
             var feeds = await _repository.GetAllFeedsAsync();
 
-            foreach (var feed in feeds.Where(f => !f.Url.StartsWith("folder://")))
-            {
-                try
+            // 並列数制御
+            var semaphore = new SemaphoreSlim(5);
+
+            var tasks = feeds
+                .Where(f => !f.Url.StartsWith("folder://"))
+                .Select(async feed =>
                 {
-                    await _feedService.FetchAndSaveEntriesAsync(feed.Id, feed.Url);
-                    await _repository.DeleteOldEntriesAsync();
-                }
-                catch (Exception ex)
-                {
-                    LoggingService.Error($"更新失敗: {feed.Title}", ex);
-                }
-            }
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        await _feedService.FetchAndSaveEntriesAsync(feed.Id, feed.Url);
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggingService.Error($"更新失敗: {feed.Title}", ex);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                });
+
+            await Task.WhenAll(tasks);
+
+            // 最後に1回だけ古い記事削除
+            await _repository.DeleteOldEntriesAsync();
         }
 
         // 単体更新（将来UIから使える）

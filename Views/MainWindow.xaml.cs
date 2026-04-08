@@ -2,19 +2,15 @@
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.UIHelpers;
-using Microsoft.Win32;
-using System;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Threading;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using Media = System.Windows.Media;
 using Input = System.Windows.Input;
+using Media = System.Windows.Media;
 using MsgBox = System.Windows.MessageBox;
 using WpfDragEventArgs = System.Windows.DragEventArgs;
 
@@ -24,10 +20,7 @@ namespace FeedGem.Views
     {
         #region --- フィールド定義 ---
 
-        private static readonly ObservableCollection<ArticleItem> value = [];
-
-        // 記事リスト（中央ペイン）に表示するためのデータ管理用
-        private readonly ObservableCollection<ArticleItem> currentArticles = value;
+        private readonly ObservableCollection<ArticleItem> currentArticles = [];
 
         // データベース操作を専門に行うインスタンス
         private readonly FeedRepository _repository;
@@ -100,6 +93,15 @@ namespace FeedGem.Views
 
             _ = UpdateTrayIconAsync();
             UpdateLastUpdateTime();
+
+            // WebView2の初期化処理を非同期で開始
+            _ = InitializeWebViewAsync();
+        }
+
+        // WebView2の初期化を1度だけ実行する
+        private async Task InitializeWebViewAsync()
+        {
+            await PreviewBrowser.EnsureCoreWebView2Async(null);
         }
 
         // 高DPIアイコンをウィンドウに適用する
@@ -165,9 +167,6 @@ namespace FeedGem.Views
                     await LoadFeedsToTreeViewAsync();
                 }
 
-                // WebView2の準備ができているか確認
-                await PreviewBrowser.EnsureCoreWebView2Async(null);
-
                 // ヘルパークラスを使ってHTMLを生成する
                 string html = ArticleHtmlService.BuildPreviewHtml(selectedArticle.Title, selectedArticle.Summary);
 
@@ -202,24 +201,23 @@ namespace FeedGem.Views
         }
 
         // テキストボックス（SearchBox）でキーが押された時の処理
-        private void SearchBox_KeyDown(object sender, Input.KeyEventArgs e)
+        private async void SearchBox_KeyDown(object sender, Input.KeyEventArgs e)
         {
             // Enterキーが押されたか確認
             if (e.Key == Key.Enter)
             {
-                PerformUrlSubscribe(); // 購読処理を実行
+                await PerformUrlSubscribeAsync(); // 非同期で購読処理を実行
             }
         }
 
         // URL入力バーの右にあるエンターボタン（⏎）をクリックした時の処理
-        private void UrlEnterButton_Click(object sender, RoutedEventArgs e)
+        private async void UrlEnterButton_Click(object sender, RoutedEventArgs e)
         {
-            // Enterキーが押された時と同じ処理を呼び出す
-            PerformUrlSubscribe();
+            await PerformUrlSubscribeAsync();
         }
 
-        // 購読処理 => SubscribeAsync
-        private async void PerformUrlSubscribe()
+        // 購読処理
+        private async Task PerformUrlSubscribeAsync()
         {
             string url = SearchBox.Text.Trim();
             if (string.IsNullOrEmpty(url) || url == "URLを入力してEnter...") return;
@@ -363,7 +361,7 @@ namespace FeedGem.Views
             e.Handled = true;
         }
 
-        // OPMLインポート本体処理
+        // OPMLインポート
         private async Task ImportOpmlAsync()
         {
             var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
@@ -383,12 +381,7 @@ namespace FeedGem.Views
             }
         }
 
-        private async void ImportOpml_Click(object sender, RoutedEventArgs e)
-        {
-            await ImportOpmlAsync();
-        }
-
-        // OPMLエクスポート本体処理
+        // OPMLエクスポート
         private async Task ExportOpmlAsync()
         {
             var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
@@ -407,10 +400,6 @@ namespace FeedGem.Views
                 LoggingService.Error("OPMLエクスポート失敗", ex);
                 MsgBox.Show($"エクスポート失敗: {ex.Message}");
             }
-        }
-        private async void ExportOpml_Click(object sender, RoutedEventArgs e)
-        {
-            await ExportOpmlAsync();
         }
 
         // 記事タイトルをクリップボードにコピーする処理

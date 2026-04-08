@@ -1,57 +1,10 @@
 ﻿using FeedGem.Data;
-using System;
-using System.Diagnostics;
-using System.Linq;
-using System.Net.Http;
-using System.ServiceModel.Syndication;
-using System.Threading.Tasks;
-using System.Xml;
-using static System.Net.WebRequestMethods;
 
 namespace FeedGem.Services
 {
     public class FeedService(FeedRepository repository)
     {
         private readonly FeedRepository _repository = repository;
-
-        // すべてのフィードを巡回して最新記事を取得・保存する
-        public async Task UpdateAllFeedsAsync()
-        {
-            var feeds = await _repository.GetAllFeedsAsync();
-            var http = HttpClientProvider.Client;
-            var semaphore = new SemaphoreSlim(5);
-
-            var tasks = feeds.Select(async feed =>
-            {
-                await semaphore.WaitAsync();
-                try
-                {
-                    using var stream = await http.GetStreamAsync(feed.Url);
-                    var articles = FeedParser.Parse(stream);
-
-                    foreach (var article in articles)
-                    {
-                        await _repository.SaveEntryAsync(
-                            feed.Id,
-                            article.Title,
-                            article.Url,
-                            article.Summary,
-                            article.Date
-                        );
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // エラー時ログ
-                    LoggingService.Error($"フィード更新失敗: {feed.Title} ({feed.Url})", ex);
-                }
-            });
-
-            await Task.WhenAll(tasks);
-
-            // 古い記事の削除
-            await _repository.DeleteOldEntriesAsync();
-        }
 
         // フィード取得＆記事保存
         public async Task FetchAndSaveEntriesAsync(long feedId, string url)

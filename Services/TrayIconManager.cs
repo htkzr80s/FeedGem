@@ -1,7 +1,4 @@
-﻿using System;
-using System.Drawing;
-using System.Reflection;
-using System.Windows;
+﻿using System.Reflection;
 using Forms = System.Windows.Forms;
 
 namespace FeedGem.Services

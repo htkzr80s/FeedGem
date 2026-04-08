@@ -1,7 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using FeedGem.Models;
 using System.Windows;
-using FeedGem.Models;
 
 namespace FeedGem.Views
 {

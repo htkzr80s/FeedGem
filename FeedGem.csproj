@@ -12,7 +12,13 @@
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
 		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
 		<ApplicationIcon>Resources\app.ico</ApplicationIcon>
-		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<AllowUnsafeBlocks>True</AllowUnsafeBlocks>
+		<Title>FeedGem</Title>
+		<Authors>htkzr80s</Authors>
+		<Product>FeedGem</Product>
+		<Description>RSS Reader</Description>
+		<Copyright>© 2026 htkzr80s</Copyright>
+		<NeutralLanguage>ja-JP</NeutralLanguage>
 	</PropertyGroup>
 
 	<ItemGroup>

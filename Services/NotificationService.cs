@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace FeedGem.Services
+﻿namespace FeedGem.Services
 {
     public class NotificationService(Action onTrayLeftClick) : IDisposable
     {
