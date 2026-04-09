@@ -4,7 +4,7 @@ using System.Windows.Media.Imaging;
 
 namespace FeedGem.UIHelpers
 {
-    public static class TreeViewHeaderFactory
+    public static class FeedTreeHeader
     {
         public static StackPanel Create(string text, bool isFolder, string? url = null)
         {

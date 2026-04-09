@@ -34,6 +34,7 @@ namespace FeedGem.Views
         private readonly OpmlService _opmlService;
         private readonly UrlSubscriptionService _subscriptionService;
         private readonly BackgroundUpdateTimer _backgroundTimer;
+        private long? _currentSelectedFeedId;
         // --- トレイ関連 ---
         private readonly UnreadCountService _unreadService;
         private readonly NotificationService _notificationService;
@@ -45,6 +46,8 @@ namespace FeedGem.Views
         {
             InitializeComponent();
             SetupWindowIcon();
+
+            ArticleListView.ItemsSource = currentArticles;
 
             // リポジトリを初期化（ファイルパスを指定）
             _repository = new FeedRepository("feedgem.db");
@@ -67,7 +70,7 @@ namespace FeedGem.Views
                 UpdateLastUpdateTime,
                 ImportOpmlAsync,
                 ExportOpmlAsync,
-                MarkCurrentListAsRead
+                RefreshCurrentArticleListAsync
             );
 
             // 起動時にデータを画面に反映させる
@@ -158,13 +161,10 @@ namespace FeedGem.Views
                 // 既読処理
                 if (!selectedArticle.IsRead)
                 {
-                    selectedArticle.IsRead = true;
-                    await _repository.MarkAsReadAsync(selectedArticle.Url);
-
+                    await _feedService.MarkArticleAsReadAsync(selectedArticle);
                     await UpdateTrayIconAsync();
-
                     // ツリーを再構築して未読数を即反映
-                    await LoadFeedsToTreeViewAsync();
+                    await UpdateUnreadCountsAsync();
                 }
 
                 // ヘルパークラスを使ってHTMLを生成する
@@ -506,7 +506,7 @@ namespace FeedGem.Views
 
             foreach (var node in nodes)
             {
-                var item = TreeViewItemFactory.Create(node);
+                var item = FeedTreeItem.Create(node);
                 // フィード選択イベント再設定
                 AttachSelectionHandler(item);
                 FeedTreeView.Items.Add(item);
@@ -526,6 +526,7 @@ namespace FeedGem.Views
                 item.Selected += async (s, e) =>
                 {
                     e.Handled = true;
+                    _currentSelectedFeedId = feedId;
                     await LoadEntriesToListViewAsync(feedId);
                 };
             }
@@ -548,15 +549,52 @@ namespace FeedGem.Views
             {
                 currentArticles.Add(article);
             }
-            ArticleListView.ItemsSource = currentArticles;
         }
 
-        // 現在表示されている記事リストをすべて既読状態に更新する
-        public void MarkCurrentListAsRead()
+        private async Task RefreshCurrentArticleListAsync()
         {
-            foreach (var article in currentArticles)
+            if (_currentSelectedFeedId.HasValue)
             {
-                article.IsRead = true;
+                await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value);
+            }
+        }
+
+        // TreeView内の未読数だけ更新する
+        private async Task UpdateUnreadCountsAsync()
+        {
+            foreach (TreeViewItem item in FeedTreeView.Items)
+            {
+                await UpdateUnreadCountsRecursive(item);
+            }
+        }
+
+        // 未読数更新（差分のみ反映）
+        private async Task UpdateUnreadCountsRecursive(TreeViewItem item)
+        {
+            if (item.Tag is TreeTag tag && tag.Type == TreeNodeType.Feed && tag.FeedId != null)
+            {
+                int unread = await _repository.GetUnreadCountAsync(tag.FeedId.Value);
+
+                // 差分があるときだけ更新
+                if (tag.UnreadCount != unread)
+                {
+                    tag.UnreadCount = unread;
+
+                    string displayName = unread > 0
+                        ? $"{tag.Name} ({unread})"
+                        : tag.Name;
+
+                    item.Header = FeedTreeHeader.Create(
+                        displayName,
+                        tag.Type == TreeNodeType.Folder,
+                        tag.Url
+                    );
+                }
+            }
+
+            foreach (TreeViewItem child in item.Items)
+            {
+                await UpdateUnreadCountsRecursive(child);
             }
         }
     }

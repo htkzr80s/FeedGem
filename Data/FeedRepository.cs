@@ -361,59 +361,67 @@ namespace FeedGem.Data
         // フォルダとその配下の全データを削除する
         public async Task DeleteFolderAsync(string folderPath)
         {
+            // フォルダパスを正規化（常に先頭に / を付ける）
+            if (string.IsNullOrEmpty(folderPath))
+                throw new ArgumentException("フォルダパスが空です", nameof(folderPath));
+
+            if (!folderPath.StartsWith('/'))
+                folderPath = "/" + folderPath.TrimEnd('/');
+
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            using var transaction = (SqliteTransaction)connection.BeginTransaction();
-
+            // SqliteTransaction を正しく取得
+            using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction ?? throw new InvalidOperationException("トランザクションの開始に失敗しました");
             try
             {
-                // 子フォルダパターン
-                string childPath = folderPath + "/%";
+                // 子フォルダすべてをカバーするLIKEパターン
+                string childPattern = folderPath + "/%";
 
-                // フォルダ名（例: /A/B → B）
-                string folderName = folderPath.TrimStart('/').Split('/').Last();
+                // フォルダ名を取得（最後の部分）
+                string folderName = folderPath.TrimStart('/').Split('/').LastOrDefault() ?? "";
 
-                // --- 1. 記事削除 ---
+                // --- 1. 記事（entries）の削除 ---
+                // 対象フォルダおよび全子孫フォルダに属する記事をすべて削除
                 string deleteEntries = """
-                    DELETE FROM entries 
+                    DELETE FROM entries
                     WHERE feed_id IN (
-                        SELECT id FROM feeds 
-                        WHERE folder_path = @path 
-                           OR folder_path LIKE @childPath
+                        SELECT id FROM feeds
+                        WHERE folder_path = @folderPath
+                           OR folder_path LIKE @childPattern ESCAPE '\'
                     )
                     """;
 
                 using (var cmd1 = new SqliteCommand(deleteEntries, connection, transaction))
                 {
-                    cmd1.Parameters.AddWithValue("@path", folderPath);
-                    cmd1.Parameters.AddWithValue("@childPath", childPath);
+                    cmd1.Parameters.AddWithValue("@folderPath", folderPath);
+                    cmd1.Parameters.AddWithValue("@childPattern", childPattern);
                     await cmd1.ExecuteNonQueryAsync();
                 }
 
-                // --- 2. フィード削除（フォルダ本体も含む） ---
+                // --- 2. フィード（feeds）の削除 ---
+                // フォルダ自体 + 子フォルダ + フォルダエントリ（folder://）をすべて削除
                 string deleteFeeds = """
-                    DELETE FROM feeds 
-                    WHERE 
-                        folder_path = @path 
-                        OR folder_path LIKE @childPath
-                        OR (title = @folderName AND url LIKE 'folder://%')
+                    DELETE FROM feeds
+                    WHERE folder_path = @folderPath
+                       OR folder_path LIKE @childPattern ESCAPE '\'
+                       OR (title = @folderName AND url LIKE 'folder://%')
                     """;
 
                 using (var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction))
                 {
-                    cmd2.Parameters.AddWithValue("@path", folderPath);
-                    cmd2.Parameters.AddWithValue("@childPath", childPath);
+                    cmd2.Parameters.AddWithValue("@folderPath", folderPath);
+                    cmd2.Parameters.AddWithValue("@childPattern", childPattern);
                     cmd2.Parameters.AddWithValue("@folderName", folderName);
                     await cmd2.ExecuteNonQueryAsync();
                 }
 
                 await transaction.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw;
+                throw new InvalidOperationException($"フォルダ削除に失敗しました: {folderPath}", ex);
             }
         }
 

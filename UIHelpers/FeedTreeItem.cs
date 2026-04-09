@@ -3,7 +3,7 @@ using System.Windows.Controls;
 
 namespace FeedGem.UIHelpers
 {
-    public static class TreeViewItemFactory
+    public static class FeedTreeItem
     {
         // TreeNodeModel → TreeViewItem に変換
         public static TreeViewItem Create(TreeNodeModel node)
@@ -15,8 +15,8 @@ namespace FeedGem.UIHelpers
 
             // ヘッダー生成
             var header = node.FeedId == null
-                ? TreeViewHeaderFactory.Create(displayName, true)
-                : TreeViewHeaderFactory.Create(displayName, false, node.Url);
+                ? FeedTreeHeader.Create(displayName, true)
+                : FeedTreeHeader.Create(displayName, false, node.Url);
 
             // TreeViewItem生成
             var item = new TreeViewItem
@@ -26,12 +26,17 @@ namespace FeedGem.UIHelpers
                     ? new TreeTag
                     {
                         Type = TreeNodeType.Feed,
-                        FeedId = node.FeedId
+                        FeedId = node.FeedId,
+                        Name = node.Name, 
+                        UnreadCount = node.UnreadCount,
+                        Url = node.Url
                     }
                     : new TreeTag
                     {
                         Type = TreeNodeType.Folder,
-                        FolderPath = node.Path
+                        FolderPath = node.Path,
+                        Name = node.Name,
+                        UnreadCount = node.UnreadCount
                     },
                 IsExpanded = true
             };

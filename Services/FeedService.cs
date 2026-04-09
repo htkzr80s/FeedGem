@@ -1,4 +1,5 @@
 ﻿using FeedGem.Data;
+using FeedGem.Models;
 
 namespace FeedGem.Services
 {
@@ -36,6 +37,19 @@ namespace FeedGem.Services
             catch (Exception ex)
             {
                 LoggingService.Error("記事取得失敗", ex);
+            }
+        }
+
+        // 記事を既読にする
+        public async Task MarkArticleAsReadAsync(ArticleItem article)
+        {
+            // 状態変更（UI反映）
+            if (!article.IsRead)
+            {
+                article.IsRead = true;
+
+                // DB更新
+                await _repository.MarkAsReadAsync(article.Url);
             }
         }
 

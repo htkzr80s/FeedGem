@@ -66,25 +66,40 @@ namespace FeedGem.UIHelpers
             string newFolderPath = "/";
             int targetIndex = -1;
             ItemsControl targetParent = (ItemsControl)sender;
+            bool isUpperHalf = false;
 
-            if (targetItem?.Tag is TreeTag targetTag)
+            if (targetItem != null && targetItem.Tag is TreeTag targetTag)
             {
+                // ドロップ位置を対象アイテム相対で取得（上下半分判定用）
+                var dropPos = e.GetPosition(targetItem);
+                double itemHeight = targetItem.ActualHeight > 0 ? targetItem.ActualHeight : 32.0;
+                isUpperHalf = dropPos.Y < itemHeight / 2;
+
                 if (targetTag.Type == TreeNodeType.Folder && targetTag.FolderPath != null)
                 {
-                    newFolderPath = targetTag.FolderPath;
-                    targetParent = targetItem;
-                    targetIndex = targetItem.Items.Count;
+                    if (!isFolderMove)
+                    {
+                        // フィードをフォルダにドロップした場合は常にフォルダ内へ移動
+                        newFolderPath = targetTag.FolderPath;
+                        targetParent = targetItem;
+                        targetIndex = targetItem.Items.Count;
+                    }
+                    else
+                    {
+                        // フォルダをフォルダにドロップ：ルート階層で前後並べ替え（位置計算は後続のrootListで実施）
+                        newFolderPath = "/";
+                    }
                 }
                 else if (targetTag.Type == TreeNodeType.Feed)
                 {
+                    // フィードを対象にした場合は同レベルで前後挿入
                     var parentItem = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(targetItem));
-                    if (parentItem?.Tag is TreeTag parentTag && parentTag.FolderPath != null)
-                    {
-                        newFolderPath = parentTag.FolderPath;
-                    }
-
-                    targetParent = parentItem ?? (ItemsControl)sender;
-                    targetIndex = targetParent.Items.IndexOf(targetItem);
+                    ItemsControl parentControl = parentItem ?? (ItemsControl)sender;
+                    TreeTag? parentTag = parentItem?.Tag as TreeTag;
+                    newFolderPath = parentTag?.FolderPath ?? "/";
+                    targetParent = parentControl;
+                    int baseIndex = parentControl.Items.IndexOf(targetItem);
+                    targetIndex = isUpperHalf ? baseIndex : baseIndex + 1;
                 }
             }
 
@@ -102,46 +117,30 @@ namespace FeedGem.UIHelpers
                 var dummyFolder = feeds.FirstOrDefault(f => f.FolderPath == "/" && f.Title == folderName && f.Url.StartsWith("folder://"));
                 if (dummyFolder == null) return;
 
-                // フォルダ単体のリストを作成して順序を入れ替える
-                var folderList = feeds
-                    .Where(f => f.FolderPath == "/" && f.Url.StartsWith("folder://") && f.Id != dummyFolder.Id)
+                // ルート階層の全アイテム（フィード＋フォルダダミー）から移動元を除いたリストを作成
+                // これでフィードの間や最後尾への挿入が可能になる
+                var rootList = feeds
+                    .Where(f => f.FolderPath == "/" && f.Id != dummyFolder.Id)
                     .OrderBy(f => f.SortOrder)
                     .ToList();
 
-                // ターゲット位置の計算
-                int insertIndex = folderList.Count;
-                if (targetItem?.Tag is TreeTag tTag)
+                // 挿入位置を視覚的なTreeView位置から計算
+                // rootControl.Items.Containsでルート直下のアイテムのみ対象（サブフォルダ内のドロップは末尾扱い）
+                int insertIndex = rootList.Count;
+                ItemsControl rootControl = (ItemsControl)sender;
+                if (targetItem != null && rootControl.Items.Contains(targetItem))
                 {
-                    if (tTag.Type == TreeNodeType.Folder)
-                    {
-                        var targetDummy = folderList.FirstOrDefault(f => f.Title == tTag.FolderPath?.TrimStart('/'));
-                        if (targetDummy != null)
-                        {
-                            insertIndex = folderList.IndexOf(targetDummy);
-                        }
-                    }
-                    else if (tTag.Type == TreeNodeType.Feed)
-                    {
-                        // フィードにドロップされた場合、親フォルダの位置を探す
-                        var parentItem = FindAncestor<TreeViewItem>(VisualTreeHelper.GetParent(targetItem));
-                        if (parentItem?.Tag is TreeTag pTag && pTag.Type == TreeNodeType.Folder)
-                        {
-                            var targetDummy = folderList.FirstOrDefault(f => f.Title == pTag.FolderPath?.TrimStart('/'));
-                            if (targetDummy != null)
-                            {
-                                insertIndex = folderList.IndexOf(targetDummy);
-                            }
-                        }
-                    }
+                    int baseIndex = rootControl.Items.IndexOf(targetItem);
+                    insertIndex = isUpperHalf ? baseIndex : baseIndex + 1;
                 }
 
-                // 計算したインデックスにフォルダを挿入
-                folderList.Insert(insertIndex, dummyFolder);
+                // 計算した位置にフォルダを挿入
+                rootList.Insert(insertIndex, dummyFolder);
 
-                // フォルダの新しい並び順を保存
-                for (int i = 0; i < folderList.Count; i++)
+                // ルート階層の全アイテムの新しい並び順を保存
+                for (int i = 0; i < rootList.Count; i++)
                 {
-                    await _repository.UpdateFeedOrderAsync(folderList[i].Id, i);
+                    await _repository.UpdateFeedOrderAsync(rootList[i].Id, i);
                 }
             }
             else

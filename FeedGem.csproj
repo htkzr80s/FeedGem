@@ -16,9 +16,12 @@
 		<Title>FeedGem</Title>
 		<Authors>htkzr80s</Authors>
 		<Product>FeedGem</Product>
-		<Description>RSS Reader</Description>
+		<Description>FeedGem</Description>
 		<Copyright>© 2026 htkzr80s</Copyright>
 		<NeutralLanguage>ja-JP</NeutralLanguage>
+		<AssemblyVersion>1.0.0.0</AssemblyVersion>
+		<Version>1.0.0</Version>
+		<PackageId>FeedGem</PackageId>
 	</PropertyGroup>
 
 	<ItemGroup>
