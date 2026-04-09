@@ -33,11 +33,12 @@ namespace FeedGem.UIHelpers
         private readonly Func<Task> _exportOpml = exportOpml;
         private readonly Func<Task> _refreshCurrentListView = refreshCurrentListView;
 
-        // ContextMenu生成
+        // 右クリックメニューを構築する
         public Wpf.ContextMenu Build(TreeViewItem? treeViewItem)
         {
             var menu = new Wpf.ContextMenu();
 
+            // 共通メニュー
             var refreshItem = new Wpf.MenuItem { Header = "今すぐ更新" };
             refreshItem.Click += async (s, e) => await RefreshAll();
             menu.Items.Add(refreshItem);
@@ -48,92 +49,101 @@ namespace FeedGem.UIHelpers
 
             menu.Items.Add(new Separator());
 
-            // OPMLインポート
+            // OPML
             var importOpmlItem = new Wpf.MenuItem { Header = "OPMLをインポート..." };
             importOpmlItem.Click += async (s, e) => await _importOpml();
             menu.Items.Add(importOpmlItem);
 
-            // OPMLエクスポート
             var exportOpmlItem = new Wpf.MenuItem { Header = "OPMLをエクスポート..." };
             exportOpmlItem.Click += async (s, e) => await _exportOpml();
             menu.Items.Add(exportOpmlItem);
 
+            // ノード固有メニュー
             if (treeViewItem?.Tag is TreeTag tag)
             {
                 menu.Items.Add(new Separator());
 
                 if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)
                 {
-                    long feedId = tag.FeedId.Value;
-                    var markAllReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
-
-                    markAllReadItem.Click += async (s, e) =>
-                    {
-                        await _feedService.MarkAllAsReadAsync(feedId);
-                        await _reloadTree();
-                        await _refreshCurrentListView();
-                    };
-                    menu.Items.Add(markAllReadItem);
-
-                    var renameItem = new Wpf.MenuItem { Header = "名前を変更..." };
-                    renameItem.Click += async (s, e) => await Rename(treeViewItem);
-                    menu.Items.Add(renameItem);
-
-                    var deleteFeedItem = new Wpf.MenuItem { Header = "このフィードを削除", Foreground = Media.Brushes.Red };
-                    deleteFeedItem.Click += async (s, e) => await DeleteFeed(feedId);
-                    menu.Items.Add(deleteFeedItem);
+                    AddFeedSpecificItems(menu, tag.FeedId.Value, treeViewItem);
                 }
                 else if (tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
                 {
-                    string folderPath = tag.FolderPath;
-
-                    // フォルダ向けのすべて既読メニューを追加
-                    var markFolderReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
-
-                    markFolderReadItem.Click += async (s, e) =>
-                    {
-                        await _feedService.MarkFolderAsReadAsync(folderPath);
-                        await _reloadTree();
-                        await _refreshCurrentListView();
-                    };
-                    menu.Items.Add(markFolderReadItem);
-
-                    var deleteFolderItem = new Wpf.MenuItem { Header = "フォルダを削除", Foreground = Media.Brushes.Red };
-
-                    deleteFolderItem.Click += async (s, e) =>
-                    {
-                        // 1. 全フィードを取得して、このフォルダ（またはサブフォルダ）に属するフィードがあるか確認
-                        var allFeeds = await _repository.GetAllFeedsAsync();
-                        bool hasContents = allFeeds.Any(f =>
-                            !f.Url.StartsWith("folder://") && // ダミー記事を除外
-                            (f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/")));
-
-                        // 2. 中身がある場合のみ警告を出す
-                        if (hasContents)
-                        {
-                            var result = MsgBox.Show(
-                                "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
-                                "確認",
-                                MessageBoxButton.YesNo,
-                                MessageBoxImage.Warning);
-
-                            if (result != MessageBoxResult.Yes)
-                                return;
-                        }
-
-                        // UIを先にクリアして不整合防止
-                        if (System.Windows.Application.Current.MainWindow is MainWindow main)
-                        {
-                            main.ClearAllPanels();
-                        }
-                        // 3. 削除処理とツリーの再読み込み
-                        await _feedService.DeleteFolderAsync(folderPath);
-                        await _reloadTree();
-                    };
-                    menu.Items.Add(deleteFolderItem);
+                    AddFolderSpecificItems(menu, tag.FolderPath, treeViewItem);
                 }
             }
             return menu;
+        }
+
+        // フィード固有メニュー
+        private void AddFeedSpecificItems(Wpf.ContextMenu menu, long feedId, TreeViewItem treeViewItem)
+        {
+            var markAllReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
+            markAllReadItem.Click += async (s, e) =>
+            {
+                await _feedService.MarkAllAsReadAsync(feedId);
+                await _reloadTree();
+                await _refreshCurrentListView();
+            };
+            menu.Items.Add(markAllReadItem);
+
+            var renameItem = new Wpf.MenuItem { Header = "名前を変更..." };
+            renameItem.Click += async (s, e) => await Rename(treeViewItem);
+            menu.Items.Add(renameItem);
+
+            var deleteFeedItem = new Wpf.MenuItem { Header = "このフィードを削除", Foreground = Media.Brushes.Red };
+            deleteFeedItem.Click += async (s, e) => await DeleteFeed(feedId);
+            menu.Items.Add(deleteFeedItem);
+        }
+
+        // フォルダ固有メニュー（名前変更を追加済み）
+        private void AddFolderSpecificItems(Wpf.ContextMenu menu, string folderPath, TreeViewItem treeViewItem)
+        {
+            // すべて既読にする
+            var markFolderReadItem = new Wpf.MenuItem { Header = "すべて既読にする" };
+            markFolderReadItem.Click += async (s, e) =>
+            {
+                await _feedService.MarkFolderAsReadAsync(folderPath);
+                await _reloadTree();
+                await _refreshCurrentListView();
+            };
+            menu.Items.Add(markFolderReadItem);
+
+            // 名前を変更...
+            var renameItem = new Wpf.MenuItem { Header = "名前を変更..." };
+            renameItem.Click += async (s, e) => await Rename(treeViewItem);
+            menu.Items.Add(renameItem);
+
+            // フォルダを削除
+            var deleteFolderItem = new Wpf.MenuItem { Header = "フォルダを削除", Foreground = Media.Brushes.Red };
+            deleteFolderItem.Click += async (s, e) =>
+            {
+                var allFeeds = await _repository.GetAllFeedsAsync();
+                bool hasContents = allFeeds.Any(f =>
+                    !f.Url.StartsWith("folder://") &&
+                    (f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/")));
+
+                if (hasContents)
+                {
+                    var result = MsgBox.Show(
+                        "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
+                        "確認",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Warning);
+
+                    if (result != MessageBoxResult.Yes)
+                        return;
+                }
+
+                if (System.Windows.Application.Current.MainWindow is MainWindow main)
+                {
+                    main.ClearAllPanels();
+                }
+
+                await _feedService.DeleteFolderAsync(folderPath);
+                await _reloadTree();
+            };
+            menu.Items.Add(deleteFolderItem);
         }
 
         // 全更新
@@ -157,7 +167,6 @@ namespace FeedGem.UIHelpers
             }
             finally
             {
-                // 正常終了でもエラー終了でも、ここでカーソルを戻す
                 Mouse.OverrideCursor = null;
             }
         }
@@ -167,9 +176,7 @@ namespace FeedGem.UIHelpers
         {
             var dialog = new InputDialog("フォルダ名");
             if (System.Windows.Application.Current?.MainWindow != null)
-            {
                 dialog.Owner = System.Windows.Application.Current.MainWindow;
-            }
 
             if (dialog.ShowDialog() != true) return;
 
@@ -177,18 +184,16 @@ namespace FeedGem.UIHelpers
             if (string.IsNullOrWhiteSpace(name)) return;
 
             string path = "/";
-
-            // フォルダ上で右クリックした場合
-            if (target?.Tag is string folderPath)
+            if (target?.Tag is TreeTag tag && tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
             {
-                path = folderPath;
+                path = tag.FolderPath;
             }
 
             await _repository.AddFeedAsync(path, name, "folder://" + Guid.NewGuid());
             await _reloadTree();
         }
 
-        // 名前変更
+        // 名前変更（フォルダ・フィード両対応）
         private async Task Rename(TreeViewItem item)
         {
             if (item.Tag is not TreeTag tag) return;
@@ -238,7 +243,6 @@ namespace FeedGem.UIHelpers
             if (MsgBox.Show("削除しますか？", "確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
                 return;
 
-            // UIを先にクリアして不整合防止
             if (System.Windows.Application.Current.MainWindow is MainWindow main)
             {
                 main.ClearAllPanels();
