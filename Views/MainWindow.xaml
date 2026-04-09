@@ -3,8 +3,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="FeedGem" Height="800" Width="1400"
-        WindowStartupLocation="CenterScreen">
-    
+        WindowStartupLocation="Manual">
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
@@ -13,9 +13,9 @@
 
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="250"/>
+                <ColumnDefinition x:Name="colFeedTree" Width="250"/>
                 <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="450"/>
+                <ColumnDefinition x:Name="colArticleList" Width="450"/>
                 <ColumnDefinition Width="5"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>

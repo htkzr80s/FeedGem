@@ -45,6 +45,24 @@ namespace FeedGem.Views
         public MainWindow()
         {
             InitializeComponent();
+
+            // Configからウィンドウ設定を読み込み、位置・サイズ・カラム幅を復元
+            // 初回はデフォルト値（Config.ini自動生成）
+            var config = App.LoadConfig();  // App経由で一元化
+            this.Left = config.WindowLeft;
+            this.Top = config.WindowTop;
+            this.Width = config.WindowWidth;
+            this.Height = config.WindowHeight;
+            colFeedTree.Width = new GridLength(config.FeedTreeWidth);
+            colArticleList.Width = new GridLength(config.ArticleListWidth);
+
+            // XAMLでx:Nameを付けたColumnDefinitionに幅を復元
+            colFeedTree?.Width = new GridLength(config.FeedTreeWidth);
+            colArticleList?.Width = new GridLength(config.ArticleListWidth);
+
+            // マルチモニタ対策：ウィンドウが表示されない位置ならプライマリ中央へ
+            App.EnsureWindowOnScreen(this);
+
             SetupWindowIcon();
 
             ArticleListView.ItemsSource = currentArticles;
@@ -139,8 +157,28 @@ namespace FeedGem.Views
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            SaveCurrentConfig();
+
             _notificationService?.Dispose();
             _backgroundTimer?.Dispose();
+        }
+
+        // 現在のウィンドウ状態（位置・サイズ・カラム幅）をConfig.iniに保存
+        private void SaveCurrentConfig()
+        {
+            var config = App.LoadConfig();  // App経由で一元化
+            config.WindowLeft = this.Left;
+            config.WindowTop = this.Top;
+            config.WindowWidth = this.Width;
+            config.WindowHeight = this.Height;
+
+            if (colFeedTree != null)
+                config.FeedTreeWidth = colFeedTree.Width.Value;
+            if (colArticleList != null)
+                config.ArticleListWidth = colArticleList.Width.Value;
+
+            // Themeは設定メニュー実装時に更新（現在はデフォルト保存）
+            App.SaveConfig(config);  // App経由でConfigManagerに投げる
         }
 
         // 未読アイコン更新
