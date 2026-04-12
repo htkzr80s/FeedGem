@@ -91,7 +91,11 @@ namespace FeedGem.UIHelpers
             renameItem.Click += async (s, e) => await Rename(treeViewItem);
             menu.Items.Add(renameItem);
 
-            var deleteFeedItem = new Wpf.MenuItem { Header = "このフィードを削除", Foreground = Media.Brushes.Red };
+            var deleteFeedItem = new Wpf.MenuItem
+            {
+                Header = "このフィードを削除",
+                Tag = "Danger"
+            };
             deleteFeedItem.Click += async (s, e) => await DeleteFeed(feedId);
             menu.Items.Add(deleteFeedItem);
         }
@@ -115,7 +119,11 @@ namespace FeedGem.UIHelpers
             menu.Items.Add(renameItem);
 
             // フォルダを削除
-            var deleteFolderItem = new Wpf.MenuItem { Header = "フォルダを削除", Foreground = Media.Brushes.Red };
+            var deleteFolderItem = new Wpf.MenuItem
+            {
+                Header = "フォルダを削除",
+                Tag = "Danger"
+            };
             deleteFolderItem.Click += async (s, e) =>
             {
                 var allFeeds = await _repository.GetAllFeedsAsync();
@@ -142,6 +150,7 @@ namespace FeedGem.UIHelpers
 
                 await _feedService.DeleteFolderAsync(folderPath);
                 await _reloadTree();
+                await _refreshCurrentListView();
             };
             menu.Items.Add(deleteFolderItem);
         }
@@ -250,6 +259,7 @@ namespace FeedGem.UIHelpers
 
             await _feedService.DeleteFeedAsync(id);
             await _reloadTree();
+            await _refreshCurrentListView();
         }
     }
 }

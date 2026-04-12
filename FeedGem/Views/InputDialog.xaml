@@ -5,14 +5,22 @@
         Height="150"
         Width="300"
         WindowStartupLocation="CenterOwner"
-        ResizeMode="NoResize">
+        ResizeMode="NoResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}">
 
     <StackPanel Margin="10">
-        <TextBlock x:Name="MessageText" Margin="0,0,0,5"/>
-        <TextBox x:Name="InputBox" Margin="0,0,0,10"/>
+
+        <TextBlock x:Name="MessageText"
+                   Margin="0,0,0,5"/>
+
+        <TextBox x:Name="InputBox"
+                 Margin="0,0,0,10"/>
+
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Width="70" Margin="5" Click="Ok_Click">OK</Button>
             <Button Width="70" Margin="5" Click="Cancel_Click">Cancel</Button>
         </StackPanel>
+
     </StackPanel>
 </Window>

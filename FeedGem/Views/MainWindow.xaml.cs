@@ -18,8 +18,6 @@ namespace FeedGem.Views
 {
     public partial class MainWindow : Window
     {
-        #region --- フィールド定義 ---
-
         private readonly ObservableCollection<ArticleItem> currentArticles = [];
 
         // データベース操作を専門に行うインスタンス
@@ -38,9 +36,6 @@ namespace FeedGem.Views
         // --- トレイ関連 ---
         private readonly UnreadCountService _unreadService;
         private readonly NotificationService _notificationService;
-        #endregion
-
-        #region --- 初期設定系 ---
 
         public MainWindow()
         {
@@ -69,7 +64,7 @@ namespace FeedGem.Views
 
             // リポジトリを初期化（ファイルパスを指定）
             _repository = new FeedRepository("feedgem.db");
-            _repository.Initialize(); // 旧 InitializeDatabase() の代わり
+            _repository.Initialize();
             _unreadService = new UnreadCountService(_repository);
             _notificationService = new NotificationService(RestoreWindow);
             _feedService = new FeedService(_repository);
@@ -99,7 +94,8 @@ namespace FeedGem.Views
             _backgroundTimer = new BackgroundUpdateTimer(
                 _updateService,
                 UpdateTrayIconAsync,
-                UpdateLastUpdateTime
+                UpdateLastUpdateTime,
+                this.Dispatcher
             );
 
             // 1時間ごとに実行
@@ -115,14 +111,63 @@ namespace FeedGem.Views
             _ = UpdateTrayIconAsync();
             UpdateLastUpdateTime();
 
+            // テーマ変更イベントを購読
+            ThemeManager.ThemeChanged += OnThemeChanged;
+
             // WebView2の初期化処理を非同期で開始
             _ = InitializeWebViewAsync();
         }
 
-        // WebView2の初期化を1度だけ実行する
+        // WebView2の初期化と、新規ページ読み込み時のスタイル自動適用を行う
         private async Task InitializeWebViewAsync()
         {
             await PreviewBrowser.EnsureCoreWebView2Async(null);
+
+            var config = App.LoadConfig();
+            string theme = config.Theme == "Auto"
+                ? ThemeManager.GetSystemTheme()
+                : config.Theme;
+
+            PreviewBrowser.DefaultBackgroundColor =
+                theme == "Dark"
+                ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
+                : System.Drawing.Color.White;
+
+            // 初回CSS（軽量版）
+            await WebViewThemeService.InitializeAsync(PreviewBrowser.CoreWebView2, theme);
+
+            // ナビゲーション後に毎回再適用
+            PreviewBrowser.CoreWebView2.NavigationCompleted += async (s, e) =>
+            {
+                var config = App.LoadConfig();
+                string theme = config.Theme == "Auto"
+                    ? ThemeManager.GetSystemTheme()
+                    : config.Theme;
+
+                PreviewBrowser.DefaultBackgroundColor =
+                    theme == "Dark"
+                    ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
+                    : System.Drawing.Color.White;
+
+                await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, theme);
+            };
+
+            // 初回表示にも適用
+            await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, theme);
+        }
+
+        // テーマ変更時に呼ばれ、WebView2のプロファイル設定と現在表示中のページ色を同期する
+        private async void OnThemeChanged(string themeName)
+        {
+            if (PreviewBrowser.CoreWebView2 != null)
+            {
+                PreviewBrowser.CoreWebView2.Profile.PreferredColorScheme =
+                    themeName == "Dark"
+                    ? Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Dark
+                    : Microsoft.Web.WebView2.Core.CoreWebView2PreferredColorScheme.Light;
+
+                await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, themeName);
+            }
         }
 
         // 高DPIアイコンをウィンドウに適用する
@@ -134,9 +179,6 @@ namespace FeedGem.Views
                 this.Icon = icon;
             }
         }
-        #endregion
-
-        #region --- UIイベントハンドラ ---
 
         // 最小化時にトレイへ
         private void MainWindow_StateChanged(object? sender, EventArgs e)
@@ -167,17 +209,37 @@ namespace FeedGem.Views
         private void SaveCurrentConfig()
         {
             var config = App.LoadConfig();  // App経由で一元化
-            config.WindowLeft = this.Left;
-            config.WindowTop = this.Top;
-            config.WindowWidth = this.Width;
-            config.WindowHeight = this.Height;
 
+            // ウィンドウ状態に応じて適切な値を取得
+            Rect bounds;
+
+            // 通常状態ならそのまま
+            if (this.WindowState == WindowState.Normal)
+            {
+                bounds = new Rect(this.Left, this.Top, this.Width, this.Height);
+            }
+            else
+            {
+                // 最大化・最小化時は復元時のサイズを使う
+                bounds = this.RestoreBounds;
+            }
+
+            // 画面外に行ってる場合のガード
+            if (bounds.Width > 0 && bounds.Height > 0)
+            {
+                config.WindowLeft = bounds.Left;
+                config.WindowTop = bounds.Top;
+                config.WindowWidth = bounds.Width;
+                config.WindowHeight = bounds.Height;
+            }
+
+            // カラム幅
             if (colFeedTree != null)
                 config.FeedTreeWidth = colFeedTree.Width.Value;
+
             if (colArticleList != null)
                 config.ArticleListWidth = colArticleList.Width.Value;
 
-            // Themeは設定メニュー実装時に更新（現在はデフォルト保存）
             App.SaveConfig(config);  // App経由でConfigManagerに投げる
         }
 
@@ -234,7 +296,7 @@ namespace FeedGem.Views
             if (SearchBox.Text == "URLを入力してEnter...")
             {
                 SearchBox.Text = ""; // ヒント文字を消す
-                SearchBox.Foreground = Media.Brushes.Black; // 文字色を黒にする
+                SearchBox.Foreground = (Media.Brush)FindResource("TextBrush");
             }
         }
 
@@ -296,6 +358,10 @@ namespace FeedGem.Views
                                 }
                             }
                         }
+                        else
+                        {
+                            LogTextBlock.Text = "購読を中止しました。";
+                        }
                         break;
 
                     case SubscribeResult.NoCandidates:
@@ -327,7 +393,7 @@ namespace FeedGem.Views
             if (FilterBox.Text == "記事を検索...")
             {
                 FilterBox.Text = "";
-                FilterBox.Foreground = Media.Brushes.Black;
+                FilterBox.Foreground = (Media.Brush)FindResource("TextBrush");
             }
         }
 
@@ -360,7 +426,15 @@ namespace FeedGem.Views
         // 記事検索バーの右にあるクリアボタン（✕）をクリックした時の処理
         private void FilterClearButton_Click(object sender, RoutedEventArgs e)
         {
-            FilterBox.Text = ""; // 検索バーを空にする（これで自動的にフィルタも解除される）
+            FilterBox.Text = "";
+            FilterBox.Text = "記事を検索...";
+        }
+
+        // 設定ボタンクリック
+        private void SettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new SettingsWindow { Owner = this };
+            window.ShowDialog();
         }
 
         // 右クリックメニューの動的生成と表示
@@ -495,9 +569,6 @@ namespace FeedGem.Views
                     UnselectAll(childItem);
             }
         }
-        #endregion
-
-        #region --- ドラッグ＆ドロップ関連 ---
 
         // ドラッグ開始位置の記録
         private void FeedTreeView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -533,7 +604,6 @@ namespace FeedGem.Views
             } while (current != null);
             return null;
         }
-        #endregion
 
         // フォルダ階層を考慮してフィード一覧を表示する
         private async Task LoadFeedsToTreeViewAsync()
@@ -634,6 +704,34 @@ namespace FeedGem.Views
             {
                 await UpdateUnreadCountsRecursive(child);
             }
+        }
+
+        // ウィンドウが表示された後に初回設定画面を表示（WPF仕様対応）
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            // コンストラクタで読み込んだconfigは使えないので、ここで再取得
+            var config = App.LoadConfig();
+
+            if (config.FirstLaunch)
+            {
+                var settings = new SettingsWindow { Owner = this };  // ここでOwnerを設定しても安全
+                settings.ShowDialog();
+
+                config.FirstLaunch = false;
+                App.SaveConfig(config);
+
+            }
+            // WebView2初期化と背景色設定
+            await PreviewBrowser.EnsureCoreWebView2Async();
+
+            // ダークテーマ判定（簡易：背景色で判断）
+            var bg = (SolidColorBrush)System.Windows.Application.Current.Resources["WindowBackgroundBrush"];
+            bool isDark = bg.Color.R < 128;
+
+            // WebView2の背景色をテーマに合わせる
+            PreviewBrowser.DefaultBackgroundColor = isDark
+                ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
+                : System.Drawing.Color.White;
         }
     }
 }

@@ -8,6 +8,9 @@ namespace FeedGem.Services
         private readonly Func<Task> _onAfterUpdateAsync;
         private readonly Action _onTick;
 
+        // UIスレッドで実行するためのDispatcher
+        private readonly System.Windows.Threading.Dispatcher _dispatcher;
+
         private PeriodicTimer? _timer;
         private CancellationTokenSource? _cts;
         private TimeSpan _currentInterval;
@@ -15,13 +18,14 @@ namespace FeedGem.Services
         public BackgroundUpdateTimer(
             FeedUpdateService updateService,
             Func<Task> onAfterUpdateAsync,
-            Action onTick)
+            Action onTick,
+            System.Windows.Threading.Dispatcher dispatcher)  // 追加
         {
             _updateService = updateService;
             _onAfterUpdateAsync = onAfterUpdateAsync;
             _onTick = onTick;
+            _dispatcher = dispatcher; // 追加
 
-            // OSの電源状態変更イベントを購読（スリープ復帰対策）
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
         }
 
@@ -37,36 +41,52 @@ namespace FeedGem.Services
             _ = RunAsync(_cts.Token);
         }
 
-        /// タイマーのメインループ。WaitForNextTickAsyncで待機し、更新処理を回す。
+        // タイマーのメインループ
         private async Task RunAsync(CancellationToken token)
         {
             try
             {
-                // 次のチック（間隔）が来るまで非同期で待機
+                // 起動直後に1回実行（スリープ復帰対策）
+                await ExecuteUpdateAsync();
+
+                // 次のチックを待機
                 while (await _timer!.WaitForNextTickAsync(token))
                 {
-                    try
-                    {
-                        // フィードの更新処理を実行
-                        await _updateService.UpdateAllAsync();
-
-                        // 更新後のコールバック（トレイ通知など）を実行
-                        if (_onAfterUpdateAsync != null)
-                            await _onAfterUpdateAsync();
-
-                        // 同期コールバック（UI上の時刻表示更新など）を実行
-                        _onTick?.Invoke();
-                    }
-                    catch (Exception ex)
-                    {
-                        // 更新中のエラーをログ出力してループは継続
-                        Console.WriteLine($"[Error] {ex.GetType().Name}: {ex.Message}");
-                    }
+                    await ExecuteUpdateAsync();
                 }
             }
             catch (OperationCanceledException)
             {
-                // CancellationTokenSourceのキャンセルによる正常な終了
+                // 正常終了（キャンセル）
+            }
+            catch (Exception ex)
+            {
+                // 予期しない例外（ログのみ）
+                Console.WriteLine($"[Fatal] {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        // フィード更新＋コールバック処理
+        private async Task ExecuteUpdateAsync()
+        {
+            try
+            {
+                // フィード更新
+                await _updateService.UpdateAllAsync();
+
+                // 非同期コールバック
+                if (_onAfterUpdateAsync != null)
+                    await _onAfterUpdateAsync();
+
+                // UI更新（Dispatcher経由で安全に実行）
+                if (_onTick != null)
+                {
+                    await _dispatcher.InvokeAsync(_onTick);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Error] {ex.GetType().Name}: {ex.Message}");
             }
         }
 
@@ -75,7 +95,7 @@ namespace FeedGem.Services
         {
             if (e.Mode == PowerModes.Resume)
             {
-                // 復帰時にタイマーを初期化し直して、即時または次サイクルから再開させる
+                // タイマー再起動
                 Start(_currentInterval);
             }
         }

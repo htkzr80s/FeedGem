@@ -3,7 +3,6 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
-using System.Windows.Forms;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -21,6 +20,10 @@ namespace FeedGem
             // プロセス固有のAppIDを設定し、タスクバーでの意図しないグループ化を防止
             SetCurrentProcessExplicitAppUserModelID("Yoshino.FeedGem.App.v1");
             base.OnStartup(e);
+
+            // 起動時に現在のテーマを適用
+            var config = LoadConfig();
+            ThemeManager.ApplyTheme(config.Theme);
         }
 
         public static readonly string ConfigPath = Path.Combine(
@@ -88,6 +91,15 @@ namespace FeedGem
             var highResFrame = decoder.Frames.OrderByDescending(f => f.PixelWidth).FirstOrDefault();
 
             return highResFrame;
+        }
+
+        // テーマ切り替え（ConfigManagerとThemeManagerを一元管理）
+        public static void ChangeTheme(string theme)
+        {
+            var config = LoadConfig();
+            config.Theme = theme;
+            SaveConfig(config);
+            ThemeManager.ApplyTheme(theme);
         }
     }
 }

@@ -57,6 +57,9 @@ namespace FeedGem.Services
                         case "ArticleListWidth":
                             if (double.TryParse(value, out double listW)) config.ArticleListWidth = listW;
                             break;
+                        case "FirstLaunch":
+                            if (bool.TryParse(value, out bool first)) config.FirstLaunch = first;
+                            break;
                     }
                 }
             }
@@ -85,6 +88,7 @@ namespace FeedGem.Services
                     ; カラム幅
                     FeedTreeWidth={config.FeedTreeWidth}
                     ArticleListWidth={config.ArticleListWidth}
+                    FirstLaunch={config.FirstLaunch}
                     ";
 
                 File.WriteAllText(ConfigPath, content);
@@ -96,12 +100,13 @@ namespace FeedGem.Services
     // 設定をまとめたクラス
     public class AppConfig
     {
-        public string Theme { get; set; } = "Auto";           // Auto / Dark / Light
+        public string Theme { get; set; } = "Auto";           // Auto / Dark / Light / User
         public double WindowLeft { get; set; } = 100;
         public double WindowTop { get; set; } = 100;
         public double WindowWidth { get; set; } = 1400;
         public double WindowHeight { get; set; } = 800;
         public double FeedTreeWidth { get; set; } = 250;
         public double ArticleListWidth { get; set; } = 450;
+        public bool FirstLaunch { get; set; } = true;         // 初回起動フラグ
     }
 }

@@ -47,7 +47,7 @@ namespace FeedGem.Services
             sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
 
             sb.Append("<style>");
-            sb.Append("body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.8; padding: 24px; color: #222; font-size: 16px; }");
+            sb.Append("body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.8; padding: 24px; font-size: 16px; }");
             sb.Append("h2 { border-bottom: 2px solid #0078D7; padding-bottom: 8px; font-size: 1.4em; }");
             sb.Append(".content { font-size: 16px; }");
             sb.Append("p { margin-bottom: 1em; }");
@@ -55,7 +55,7 @@ namespace FeedGem.Services
             sb.Append("a:hover { text-decoration: underline; }");
             sb.Append("img { max-width: 100%; height: auto; border-radius: 4px; }");
             sb.Append("pre { background: #f4f4f4; padding: 10px; overflow-x: auto; }");
-            sb.Append(".empty { color: #666; font-style: italic; }");
+            sb.Append(".empty { font-style: italic; }");
             sb.Append("</style>");
 
             sb.Append("</head><body>");

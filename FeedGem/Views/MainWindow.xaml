@@ -3,7 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="FeedGem" Height="800" Width="1400"
-        WindowStartupLocation="Manual">
+        WindowStartupLocation="Manual"
+        Background="{DynamicResource WindowBackgroundBrush}" 
+        Foreground="{DynamicResource TextBrush}"
+        Loaded="MainWindow_Loaded">
 
     <Grid>
         <Grid.RowDefinitions>
@@ -21,6 +24,9 @@
             </Grid.ColumnDefinitions>
 
             <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5" 
+                      Background="{DynamicResource ControlBackgroundBrush}"
+                      Foreground="{DynamicResource TextBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}"
                       PreviewMouseRightButtonDown="FeedTreeView_PreviewMouseRightButtonDown"
                       AllowDrop="True"
                       PreviewMouseLeftButtonDown="FeedTreeView_PreviewMouseLeftButtonDown"
@@ -28,21 +34,19 @@
                       DragOver="FeedTreeView_DragOver"
                       Drop="FeedTreeView_Drop">
 
-                <TreeView.Resources>
-                    <Style TargetType="TreeViewItem">
-                        <Setter Property="FontSize" Value="14"/>
-                        <Setter Property="Padding" Value="2,4"/>
-                    </Style>
-                </TreeView.Resources>
             </TreeView>
 
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="LightGray"/>
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource SplitterBrush}"/>
 
-            <ListView x:Name="ArticleListView" Grid.Column="2" Margin="5" 
+            <ListView x:Name="ArticleListView" Grid.Column="2" Margin="5"
+                      Background="{DynamicResource ControlBackgroundBrush}"
+                      Foreground="{DynamicResource TextBrush}"
+                      BorderBrush="{DynamicResource BorderBrush}"
                       SelectionChanged="ArticleListView_SelectionChanged"
-                      HorizontalContentAlignment="Stretch"
                       ScrollViewer.HorizontalScrollBarVisibility="Disabled">
-                
+
+                <!-- ItemContainerStyleはテーマファイル側で一元管理済みなので削除 -->
+
                 <ListView.ContextMenu>
                     <ContextMenu>
                         <MenuItem Header="ブラウザで開く" Click="OpenBrowserButton_Click">
@@ -55,10 +59,10 @@
                         <MenuItem Header="URLをコピー" Click="CopyUrl_Click" />
                     </ContextMenu>
                 </ListView.ContextMenu>
-                
+
                 <ListView.ItemTemplate>
                     <DataTemplate>
-                        <Grid Margin="0,2,0,6">
+                        <Grid Margin="0,2,0,6" HorizontalAlignment="Stretch">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -72,43 +76,55 @@
                                 <TextBlock.Style>
                                     <Style TargetType="TextBlock">
                                         <Setter Property="FontWeight" Value="Bold"/>
-                                        <Setter Property="Foreground" Value="Black"/>
+                                        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsRead}" Value="True">
                                                 <Setter Property="FontWeight" Value="Normal"/>
-                                                <Setter Property="Foreground" Value="Gray"/>
+                                                <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </TextBlock.Style>
                             </TextBlock>
 
-                            <DockPanel Grid.Row="1">
-                                <TextBlock Text="{Binding FeedTitle}" 
-                                           FontSize="13" 
-                                           Foreground="#0078D7" 
-                                           Margin="0,0,10,0"
-                                           VerticalAlignment="Center"/>
+                            <Grid Grid.Row="1" HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
 
-                                <TextBlock Text="{Binding DisplayDate}" 
-                                           FontSize="13" 
-                                           Foreground="DimGray" 
-                                           HorizontalAlignment="Right"
-                                           VerticalAlignment="Center"/>
-                            </DockPanel>
+                                <!-- 左：フィード名 -->
+                                <TextBlock Grid.Column="0"
+                                       Text="{Binding FeedTitle}" 
+                                       FontSize="13" 
+                                       Foreground="{DynamicResource FeedTitleBrush}" 
+                                       Margin="0,0,10,0"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"/>
+
+                                <!-- 右：日時 -->
+                                <TextBlock Grid.Column="1"
+                                       Text="{Binding DisplayDate}" 
+                                       FontSize="13" 
+                                       Foreground="{DynamicResource TextMutedBrush}" 
+                                       VerticalAlignment="Center"/>
+                            </Grid>
                         </Grid>
                     </DataTemplate>
                 </ListView.ItemTemplate>
             </ListView>
 
-            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="LightGray"/>
+            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="{DynamicResource SplitterBrush}"/>
 
-            <Grid Grid.Column="4" Margin="5">
+            <Grid Grid.Column="4" Margin="5"
+                  Background="{DynamicResource ControlBackgroundBrush}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="40"/>
                 </Grid.RowDefinitions>
-                <wv2:WebView2 x:Name="PreviewBrowser" Grid.Row="0"/>
+                <Border Grid.Row="0" Background="{DynamicResource ControlBackgroundBrush}">
+                    <wv2:WebView2 x:Name="PreviewBrowser"/>
+                </Border>
                 <Button x:Name="OpenBrowserButton" Grid.Row="1" Content="ブラウザで開く" Width="160" Height="32" FontSize="16" HorizontalAlignment="Right" Margin="0,5,0,0" Click="OpenBrowserButton_Click"/>
             </Grid>
         </Grid>
@@ -130,7 +146,7 @@
             <StatusBarItem Grid.Column="0">
                 <StackPanel Orientation="Horizontal">
                     <TextBox x:Name="SearchBox" Width="250" Text="URLを入力してEnter..." 
-                            Foreground="Gray" FontSize="14"
+                            Foreground="{DynamicResource TextMutedBrush}" FontSize="14"
                             GotFocus="SearchBox_GotFocus" 
                             KeyDown="SearchBox_KeyDown"/>
                     <Button Content="⏎" Width="35" Margin="2,0,0,0" Click="UrlEnterButton_Click" ToolTip="購読を開始" FontSize="14"/>
@@ -140,15 +156,17 @@
             <StatusBarItem Grid.Column="1" Margin="10,0,0,0">
                 <StackPanel Orientation="Horizontal">
                     <TextBox x:Name="FilterBox" Width="180" Text="記事を検索..."
-                            Foreground="Gray" FontSize="14"
+                            Foreground="{DynamicResource TextMutedBrush}" FontSize="14"
                             GotFocus="FilterBox_GotFocus" 
                             TextChanged="FilterBox_TextChanged"/>
                     <Button x:Name="FilterClearButton" Content="✕" Width="35" Margin="2,0,0,0" Click="FilterClearButton_Click" ToolTip="検索をクリア" FontSize="14"/>
+                    <Button Content="⚙️" Width="35" Margin="2,0,0,0"
+                            Click="SettingsButton_Click" ToolTip="設定"/>
                 </StackPanel>
             </StatusBarItem>
 
             <StatusBarItem Grid.Column="2" HorizontalContentAlignment="Stretch">
-                <TextBlock x:Name="LogTextBlock" Text="" Foreground="DimGray" Margin="10,0" TextTrimming="CharacterEllipsis" FontSize="14"/>
+                <TextBlock x:Name="LogTextBlock" Text="" Foreground="{DynamicResource TextMutedBrush}" Margin="10,0" TextTrimming="CharacterEllipsis" FontSize="14"/>
             </StatusBarItem>
 
             <StatusBarItem Grid.Column="3">
