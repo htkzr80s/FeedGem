@@ -76,7 +76,7 @@ namespace FeedGem.Services
                     Directory.CreateDirectory(ConfigDirectory);
 
                 var content = $@"[FeedGem]
-                    ; テーマ設定 (Auto / Dark / Light)
+                    ; Theme (Auto / Dark / Light)
                     Theme={config.Theme}
 
                     ; ウィンドウ位置・サイズ

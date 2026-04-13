@@ -1,8 +1,8 @@
 ﻿<Window x:Class="FeedGem.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="FeedGem 設定"
-        Height="320"
+        Title="Options"
+        Height="300"
         Width="420"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
@@ -16,7 +16,7 @@
             <TextBlock Text="テーマ"
                        FontSize="16"
                        FontWeight="Bold"
-                       Margin="0,0,0,10"/>
+                       Margin="5,0,0,10"/>
 
             <!-- テーマ選択 -->
             <RadioButton x:Name="RadioAuto"

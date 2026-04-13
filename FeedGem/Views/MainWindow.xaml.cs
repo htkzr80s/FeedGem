@@ -555,7 +555,7 @@ namespace FeedGem.Views
         // 最終更新日時表示を更新
         private void UpdateLastUpdateTime()
         {
-            LastUpdateTextBlock.Text = $"最終更新: {DateTime.Now:yyyy/MM/dd HH:mm}";
+            LastUpdateTextBlock.Text = $"最終更新: {DateFormatService.Instance.FormatDate(DateTime.Now)}";
         }
 
         // TreeViewの選択を再帰的に解除

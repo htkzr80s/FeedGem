@@ -1,3 +1,4 @@
+using FeedGem.Services;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
@@ -39,7 +40,7 @@ namespace FeedGem.Models
         }
 
         // UI（画面）の表示に使うための専用プロパティ
-        public string DisplayDate => Date.ToString("yyyy/MM/dd HH:mm");
+        public string DisplayDate => DateFormatService.Instance.FormatDate(Date);
 
         // 記事URL
         public string Url

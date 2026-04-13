@@ -34,7 +34,7 @@ namespace FeedGem.Services
 
                     candidates.Add(new FeedCandidate
                     {
-                        Title = feed.Title?.Text ?? "フィード",
+                        Title = feed.Title?.Text ?? "Feed",
                         Url = url,
                         Type = type
                     });
@@ -168,7 +168,7 @@ namespace FeedGem.Services
                             feedType = "RSS";
 
                         // 元タイトル取得
-                        string originalTitle = System.Net.WebUtility.HtmlDecode(feed.Title?.Text ?? "フィード");
+                        string originalTitle = System.Net.WebUtility.HtmlDecode(feed.Title?.Text ?? "Feed");
 
                         string displayTitle = originalTitle;
 

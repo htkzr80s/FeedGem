@@ -6,7 +6,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using Input = System.Windows.Input;
-using Media = System.Windows.Media;
 using MsgBox = System.Windows.MessageBox;
 using Wpf = System.Windows.Controls;
 
