@@ -122,14 +122,17 @@ namespace FeedGem.Views
         // ウィンドウの描画が完了した後に呼ばれるイベント
         private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // 1. まずはスケルトン（ダミー項目）を表示して「動いている感」を出す
+            // スケルトン（ダミー項目）を表示
             ShowSkeletonLoaders();
 
-            // UIスレッドをブロックしないよう、DBの初期化を別スレッドで実行する
+            // UIスレッドをブロックしないよう、DBの初期化を別スレッドで実行
             await Task.Run(() => _repository.Initialize());
 
             // 起動時にデータを画面に反映させる
             await LoadFeedsToTreeViewAsync();
+
+            // スケルトン（ダミー項目）を消去する
+            currentArticles.Clear();
 
             // トレイアイコンと最終更新日時を更新
             await UpdateTrayIconAsync();
@@ -143,6 +146,8 @@ namespace FeedGem.Views
 
             // WebView2の初期化処理を非同期で開始
             _ = InitializeWebViewAsync();
+
+            LogTextBlock.Text = "起動完了しました。";
         }
 
         // 記事リストにスケルトンUI（ダミー項目）を表示する
@@ -154,8 +159,8 @@ namespace FeedGem.Views
             {
                 currentArticles.Add(new ArticleItem
                 {
-                    Title = "読み込み中...",
-                    Summary = "コンテンツを準備しています。しばらくお待ちください。",
+                    Title = "_Loading_",
+                    Summary = "Preparation in progress. Please wait a moment.",
                     IsRead = true // 未読バッジが出ないようにしておく
                 });
             }
