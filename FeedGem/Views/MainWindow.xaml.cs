@@ -43,8 +43,7 @@ namespace FeedGem.Views
             InitializeComponent();
 
             // Configからウィンドウ設定を読み込み、位置・サイズ・カラム幅を復元
-            // 初回はデフォルト値（Config.ini自動生成）
-            var config = App.LoadConfig();  // App経由で一元化
+            var config = App.LoadConfig();
             this.Left = config.WindowLeft;
             this.Top = config.WindowTop;
             this.Width = config.WindowWidth;
@@ -78,7 +77,6 @@ namespace FeedGem.Views
 
             // リポジトリを初期化（ファイルパスを指定）
             _repository = new FeedRepository(dbPath);
-            _repository.Initialize();
             _unreadService = new UnreadCountService(_repository);
             _notificationService = new NotificationService(RestoreWindow);
             _feedService = new FeedService(_repository);
@@ -100,20 +98,12 @@ namespace FeedGem.Views
                 RefreshCurrentArticleListAsync
             );
 
-            // 起動時にデータを画面に反映させる
-            _ = LoadFeedsToTreeViewAsync();
-
-            // バックグラウンドでの更新処理を開始
-            _ = _updateService.UpdateAllAsync();
             _backgroundTimer = new BackgroundUpdateTimer(
                 _updateService,
                 UpdateTrayIconAsync,
                 UpdateLastUpdateTime,
                 this.Dispatcher
             );
-
-            // 1時間ごとに実行
-            _backgroundTimer.Start(TimeSpan.FromHours(1));
 
             _dragHandler = new TreeDragDropHandler(
                 _repository,
@@ -122,14 +112,53 @@ namespace FeedGem.Views
 
             this.StateChanged += MainWindow_StateChanged;
 
-            _ = UpdateTrayIconAsync();
-            UpdateLastUpdateTime();
-
             // テーマ変更イベントを購読
             ThemeManager.ThemeChanged += OnThemeChanged;
 
+            // ウィンドウのUI描画が完了した時のイベントを登録
+            this.Loaded += MainWindow_Loaded;
+        }
+
+        // ウィンドウの描画が完了した後に呼ばれるイベント
+        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            // 1. まずはスケルトン（ダミー項目）を表示して「動いている感」を出す
+            ShowSkeletonLoaders();
+
+            // UIスレッドをブロックしないよう、DBの初期化を別スレッドで実行する
+            await Task.Run(() => _repository.Initialize());
+
+            // 起動時にデータを画面に反映させる
+            await LoadFeedsToTreeViewAsync();
+
+            // トレイアイコンと最終更新日時を更新
+            await UpdateTrayIconAsync();
+            UpdateLastUpdateTime();
+
+            // バックグラウンドでの更新処理を開始
+            _ = _updateService.UpdateAllAsync();
+
+            // 1時間ごとに実行
+            _backgroundTimer.Start(TimeSpan.FromHours(1));
+
             // WebView2の初期化処理を非同期で開始
             _ = InitializeWebViewAsync();
+        }
+
+        // 記事リストにスケルトンUI（ダミー項目）を表示する
+        private void ShowSkeletonLoaders()
+        {
+            currentArticles.Clear();
+            // 5つほど「読み込み中」状態のダミーデータを追加
+            for (int i = 0; i < 5; i++)
+            {
+                currentArticles.Add(new ArticleItem
+                {
+                    Title = "読み込み中...",
+                    Summary = "コンテンツを準備しています。しばらくお待ちください。",
+                    IsRead = true // 未読バッジが出ないようにしておく
+                });
+            }
         }
 
         // WebView2の初期化と、新規ページ読み込み時のスタイル自動適用を行う
