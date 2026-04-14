@@ -1,15 +1,18 @@
 ﻿using FeedGem.Services;
-using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Threading;
 
 namespace FeedGem
 {
     public partial class App : System.Windows.Application
     {
+        // 2重起動防止用のミューテックスインスタンス
+        private static System.Threading.Mutex? _mutex;
+
         // Shell32.dllの関数をインポート
         [LibraryImport("shell32.dll", SetLastError = true)]
         private static partial void SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string AppID);
@@ -17,6 +20,13 @@ namespace FeedGem
         // アプリケーション起動時の処理
         protected override void OnStartup(StartupEventArgs e)
         {
+            _mutex = new System.Threading.Mutex(true, "Yoshino.FeedGem.App.UniqueInstance", out bool createdNew);
+            if (!createdNew)
+            {
+                System.Windows.Application.Current.Shutdown();
+                return;
+            }
+
             // プロセス固有のAppIDを設定し、タスクバーでの意図しないグループ化を防止
             SetCurrentProcessExplicitAppUserModelID("Yoshino.FeedGem.App.v1");
             base.OnStartup(e);
@@ -25,13 +35,6 @@ namespace FeedGem
             var config = LoadConfig();
             ThemeManager.ApplyTheme(config.Theme);
         }
-
-        public static readonly string ConfigPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "FeedGem",
-            "Config.ini");
-
-        public static readonly string ConfigDirectory = Path.GetDirectoryName(ConfigPath) ?? "";
 
         // ConfigManagerへの呼び出しをApp.xaml.csで一元化
         // MainWindowや今後の設定メニューは必ずここを経由してConfigManagerに投げる
@@ -100,6 +103,14 @@ namespace FeedGem
             config.Theme = theme;
             SaveConfig(config);
             ThemeManager.ApplyTheme(theme);
+        }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            // アプリ終了時にミューテックスを解放
+            _mutex?.ReleaseMutex();
+            _mutex?.Dispose();
+            base.OnExit(e);
         }
     }
 }
