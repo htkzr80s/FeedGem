@@ -46,7 +46,10 @@ namespace FeedGem.Services
         {
             try
             {
-                // 起動直後に1回実行（スリープ復帰対策）
+                // スリープ復帰時にネットワークが安定するまでの猶予として10秒待機
+                await Task.Delay(10000, token);
+
+                // 起動直後に1回実行
                 await ExecuteUpdateAsync();
 
                 // 次のチックを待機

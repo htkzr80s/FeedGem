@@ -4,20 +4,26 @@ namespace FeedGem.Services
 {
     public class ConfigManager
     {
-        private static readonly string ConfigPath = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory,  // exeがあるディレクトリ
-            "FeedGem.ini");  // ファイル名をFeedGem.iniに（.ini拡張子で明確に）
+        // データベースと同じUserDataフォルダを定義
+        private static readonly string UserDataDirectory = Path.Combine(AppContext.BaseDirectory, "UserData");
 
-        private static readonly string ConfigDirectory = Path.GetDirectoryName(ConfigPath) ?? "";
+        // ConfigPathをUserData配下に変更
+        private static readonly string ConfigPath = Path.Combine(UserDataDirectory, "FeedGem.ini");
 
         // 設定を読み込む（存在しなければデフォルト値を返す）
         public static AppConfig Load()
         {
             var config = new AppConfig();
 
+            // フォルダが存在しない場合は作成
+            if (!Directory.Exists(UserDataDirectory))
+            {
+                Directory.CreateDirectory(UserDataDirectory);
+            }
+
             if (!File.Exists(ConfigPath))
             {
-                Save(config); // ConfigManager自身の責務で保存
+                Save(config);
                 return config;
             }
 
@@ -57,9 +63,6 @@ namespace FeedGem.Services
                         case "ArticleListWidth":
                             if (double.TryParse(value, out double listW)) config.ArticleListWidth = listW;
                             break;
-                        case "FirstLaunch":
-                            if (bool.TryParse(value, out bool first)) config.FirstLaunch = first;
-                            break;
                     }
                 }
             }
@@ -72,8 +75,8 @@ namespace FeedGem.Services
         {
             try
             {
-                if (!Directory.Exists(ConfigDirectory))
-                    Directory.CreateDirectory(ConfigDirectory);
+                if (!Directory.Exists(UserDataDirectory))
+                    Directory.CreateDirectory(UserDataDirectory);
 
                 var content = $@"[FeedGem]
                     ; Theme (Auto / Dark / Light)
@@ -88,7 +91,6 @@ namespace FeedGem.Services
                     ; カラム幅
                     FeedTreeWidth={config.FeedTreeWidth}
                     ArticleListWidth={config.ArticleListWidth}
-                    FirstLaunch={config.FirstLaunch}
                     ";
 
                 File.WriteAllText(ConfigPath, content);
@@ -100,13 +102,12 @@ namespace FeedGem.Services
     // 設定をまとめたクラス
     public class AppConfig
     {
-        public string Theme { get; set; } = "Auto";           // Auto / Dark / Light / User
+        public string Theme { get; set; } = "Auto";           // Auto / Dark / Light
         public double WindowLeft { get; set; } = 100;
         public double WindowTop { get; set; } = 100;
         public double WindowWidth { get; set; } = 1400;
         public double WindowHeight { get; set; } = 800;
         public double FeedTreeWidth { get; set; } = 250;
         public double ArticleListWidth { get; set; } = 450;
-        public bool FirstLaunch { get; set; } = true;         // 初回起動フラグ
     }
 }

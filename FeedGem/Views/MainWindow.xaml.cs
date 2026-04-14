@@ -4,6 +4,7 @@ using FeedGem.Services;
 using FeedGem.UIHelpers;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -62,8 +63,21 @@ namespace FeedGem.Views
 
             ArticleListView.ItemsSource = currentArticles;
 
+            // EXEがある場所を取得
+            string baseDir = AppContext.BaseDirectory;
+            string userDataDir = Path.Combine(baseDir, "UserData");
+
+            // フォルダが存在しなければ作成
+            if (!Directory.Exists(userDataDir))
+            {
+                Directory.CreateDirectory(userDataDir);
+            }
+
+            // ファイルのフルパスを生成
+            string dbPath = Path.Combine(userDataDir, "feedgem.db");
+
             // リポジトリを初期化（ファイルパスを指定）
-            _repository = new FeedRepository("feedgem.db");
+            _repository = new FeedRepository(dbPath);
             _repository.Initialize();
             _unreadService = new UnreadCountService(_repository);
             _notificationService = new NotificationService(RestoreWindow);
@@ -704,34 +718,6 @@ namespace FeedGem.Views
             {
                 await UpdateUnreadCountsRecursive(child);
             }
-        }
-
-        // ウィンドウが表示された後に初回設定画面を表示（WPF仕様対応）
-        private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            // コンストラクタで読み込んだconfigは使えないので、ここで再取得
-            var config = App.LoadConfig();
-
-            if (config.FirstLaunch)
-            {
-                var settings = new SettingsWindow { Owner = this };  // ここでOwnerを設定しても安全
-                settings.ShowDialog();
-
-                config.FirstLaunch = false;
-                App.SaveConfig(config);
-
-            }
-            // WebView2初期化と背景色設定
-            await PreviewBrowser.EnsureCoreWebView2Async();
-
-            // ダークテーマ判定（簡易：背景色で判断）
-            var bg = (SolidColorBrush)System.Windows.Application.Current.Resources["WindowBackgroundBrush"];
-            bool isDark = bg.Color.R < 128;
-
-            // WebView2の背景色をテーマに合わせる
-            PreviewBrowser.DefaultBackgroundColor = isDark
-                ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
-                : System.Drawing.Color.White;
         }
     }
 }

@@ -5,8 +5,7 @@
         Title="FeedGem v1.0.0" Height="800" Width="1400"
         WindowStartupLocation="Manual"
         Background="{DynamicResource WindowBackgroundBrush}" 
-        Foreground="{DynamicResource TextBrush}"
-        Loaded="MainWindow_Loaded">
+        Foreground="{DynamicResource TextBrush}">
 
     <Grid>
         <Grid.RowDefinitions>
