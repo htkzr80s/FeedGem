@@ -1,5 +1,4 @@
-﻿using FeedGem.Services;
-using System.Windows;
+﻿using System.Windows;
 
 namespace FeedGem.Views
 {
@@ -42,7 +41,7 @@ namespace FeedGem.Views
             if (sender is System.Windows.Controls.RadioButton radio && radio.IsChecked == true)
             {
                 string theme = radio.Name.Replace("Radio", "");
-                ThemeManager.ApplyTheme(theme);
+                App.ApplyThemePreview(theme);
             }
         }
 
@@ -64,7 +63,7 @@ namespace FeedGem.Views
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
             // キャンセル時は元のテーマに戻す（保存はしない）
-            ThemeManager.ApplyTheme(originalTheme);
+            App.ApplyThemePreview(originalTheme);
 
             DialogResult = false;
             Close();

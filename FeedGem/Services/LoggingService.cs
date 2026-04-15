@@ -8,7 +8,11 @@ namespace FeedGem.Services
         // 同時書き込み防止用ロック
         private static readonly Lock _lock = new();
 
-        private static readonly string LogFilePath = "log.txt";
+        // ログディレクトリのパスを定義
+        private static readonly string LogDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs");
+
+        // ログファイルのフルパスを定義
+        private static readonly string LogFilePath = Path.Combine(LogDirectory, "log.txt");
 
         // 情報ログ
         public static void Info(string message)
@@ -31,6 +35,10 @@ namespace FeedGem.Services
 
             try
             {
+                // ログディレクトリが存在しない場合は作成
+                if (!Directory.Exists(LogDirectory)) Directory.CreateDirectory(LogDirectory);
+
+                // ロックをかけてファイルに追記
                 lock (_lock)
                 {
                     File.AppendAllText(LogFilePath, line + Environment.NewLine);

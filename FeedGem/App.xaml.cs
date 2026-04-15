@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Threading;
 
 namespace FeedGem
 {
@@ -96,12 +95,9 @@ namespace FeedGem
             return highResFrame;
         }
 
-        // テーマ切り替え（ConfigManagerとThemeManagerを一元管理）
-        public static void ChangeTheme(string theme)
+        // テーマを画面に反映させるだけの処理（保存はしない）
+        public static void ApplyThemePreview(string theme)
         {
-            var config = LoadConfig();
-            config.Theme = theme;
-            SaveConfig(config);
             ThemeManager.ApplyTheme(theme);
         }
 
