@@ -125,29 +125,36 @@ namespace FeedGem.Views
             // スケルトン（ダミー項目）を表示
             ShowSkeletonLoaders();
 
-            // UIスレッドをブロックしないよう、DBの初期化を別スレッドで実行
-            await Task.Run(() => _repository.Initialize());
+            try
+            {
+                // UIスレッドをブロックしないよう、DBの初期化を別スレッドで実行
+                await Task.Run(() => _repository.Initialize());
 
-            // 起動時にデータを画面に反映させる
-            await LoadFeedsToTreeViewAsync();
+                // 起動時にデータを画面に反映させる
+                await LoadFeedsToTreeViewAsync();
 
-            // スケルトン（ダミー項目）を消去する
-            currentArticles.Clear();
+                // スケルトン（ダミー項目）を消去する
+                currentArticles.Clear();
 
-            // トレイアイコンと最終更新日時を更新
-            await UpdateTrayIconAsync();
-            UpdateLastUpdateTime();
+                // トレイアイコンと最終更新日時を更新
+                await UpdateTrayIconAsync();
+                UpdateLastUpdateTime();
 
-            // バックグラウンドでの更新処理を開始
-            _ = _updateService.UpdateAllAsync();
+                // バックグラウンドでの更新処理を開始
+                _ = _updateService.UpdateAllAsync();
 
-            // 1時間ごとに実行
-            _backgroundTimer.Start(TimeSpan.FromHours(1));
+                // 1時間ごとに実行
+                _backgroundTimer.Start(TimeSpan.FromHours(1));
 
-            // WebView2の初期化処理を非同期で開始
-            _ = InitializeWebViewAsync();
+                // WebView2の初期化処理を非同期で開始
+                _ = InitializeWebViewAsync();
 
-            LogTextBlock.Text = "起動完了しました。";
+                LogTextBlock.Text = "準備が完了しました。";
+            }
+            catch (Exception)
+            {
+                LogTextBlock.Text = "アプリの起動に失敗しました。一部機能が制限されます。";
+            }
         }
 
         // 記事リストにスケルトンUI（ダミー項目）を表示する
@@ -169,39 +176,63 @@ namespace FeedGem.Views
         // WebView2の初期化と、新規ページ読み込み時のスタイル自動適用を行う
         private async Task InitializeWebViewAsync()
         {
-            await PreviewBrowser.EnsureCoreWebView2Async(null);
-
-            var config = App.LoadConfig();
-            string theme = config.Theme == "Auto"
-                ? ThemeManager.GetSystemTheme()
-                : config.Theme;
-
-            PreviewBrowser.DefaultBackgroundColor =
-                theme == "Dark"
-                ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
-                : System.Drawing.Color.White;
-
-            // 初回CSS（軽量版）
-            await WebViewThemeService.InitializeAsync(PreviewBrowser.CoreWebView2, theme);
-
-            // ナビゲーション後に毎回再適用
-            PreviewBrowser.CoreWebView2.NavigationCompleted += async (s, e) =>
+            try
             {
+                // WebView2の準備を待機する
+                await PreviewBrowser.EnsureCoreWebView2Async(null);
+
                 var config = App.LoadConfig();
                 string theme = config.Theme == "Auto"
                     ? ThemeManager.GetSystemTheme()
                     : config.Theme;
 
+                // 背景色の設定
                 PreviewBrowser.DefaultBackgroundColor =
                     theme == "Dark"
                     ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
                     : System.Drawing.Color.White;
 
-                await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, theme);
-            };
+                // 初回CSS（軽量版）
+                await WebViewThemeService.InitializeAsync(PreviewBrowser.CoreWebView2, theme);
 
-            // 初回表示にも適用
-            await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, theme);
+                // ナビゲーション後に毎回再適用
+                PreviewBrowser.CoreWebView2.NavigationCompleted += async (s, e) =>
+                {
+                    try
+                    {
+                        var config = App.LoadConfig();
+                        string theme = config.Theme == "Auto"
+                            ? ThemeManager.GetSystemTheme()
+                            : config.Theme;
+
+                        PreviewBrowser.DefaultBackgroundColor =
+                            theme == "Dark"
+                            ? System.Drawing.Color.FromArgb(255, 32, 32, 32)
+                            : System.Drawing.Color.White;
+
+                        await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, theme);
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"ナビゲーション時のテーマ適用エラー: {ex.Message}");
+                    }     
+                };
+
+                // 初回表示にも適用
+                await WebViewThemeService.ApplyAsync(PreviewBrowser.CoreWebView2, theme);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"WebView2 initialization failed: {ex.Message}");
+
+                System.Windows.MessageBox.Show(
+                    "Failed to load the browser component.\n" +
+                    "If the problem persists, please reinstall the Microsoft Edge WebView2 Runtime.\n\n" +
+                    "https://developer.microsoft.com/microsoft-edge/webview2/",
+                    "WebView2 Initialization Failed",
+                    System.Windows.MessageBoxButton.OK,
+                    System.Windows.MessageBoxImage.Warning);
+            }
         }
 
         // テーマ変更時に呼ばれ、WebView2のプロファイル設定と現在表示中のページ色を同期する
