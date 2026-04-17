@@ -412,57 +412,67 @@ namespace FeedGem.Views
 
                 var result = await _subscriptionService.HandleCandidatesAsync(candidates);
 
-                switch (result)
+                if (result == SubscribeResult.NeedsSelection)
                 {
+                    var window = new FeedSelectionWindow(candidates) { Owner = this };
 
-                    case SubscribeResult.Success:
-                        LogTextBlock.Text = "フィードを追加しました。";
-                        await LoadFeedsToTreeViewAsync();
-                        break;
-
-                    case SubscribeResult.NeedsSelection:
-                        var window = new FeedSelectionWindow(candidates) { Owner = this };
-
-                        if (window.ShowDialog() == true)
+                    if (window.ShowDialog() == true)
+                    {
+                        var selected = window.SelectedFeeds.FirstOrDefault();
+                        if (selected != null)
                         {
-                            var selected = window.SelectedFeeds.FirstOrDefault();
-                            if (selected != null)
-                            {
-                                var secondResult = await _subscriptionService.AddFeedAsync(selected);
-
-                                if (secondResult == SubscribeResult.Success)
-                                {
-                                    LogTextBlock.Text = "フィードを追加しました。";
-                                    await LoadFeedsToTreeViewAsync();
-                                }
-                            }
+                            result = await _subscriptionService.AddFeedAsync(selected);
                         }
                         else
                         {
-                            LogTextBlock.Text = "購読を中止しました。";
+                            result = SubscribeResult.Error;
                         }
-                        break;
-
-                    case SubscribeResult.NoCandidates:
-                        LogTextBlock.Text = "フィードが見つかりませんでした。";
-                        MsgBox.Show("フィードが見つかりませんでした。");
-                        break;
-
-                    case SubscribeResult.TooManyCandidates:
-                        LogTextBlock.Text = "購読URLが多すぎるため処理を中止しました。";
-                        MsgBox.Show("購読URLが多すぎるため処理を中止しました。");
-                        break;
-
-                    case SubscribeResult.SkippedOrEmpty:
-                        LogTextBlock.Text = "重複、または記事がないため購読を中止しました。";
-                        MsgBox.Show("重複、または記事がないため購読を中止しました。");
-                        break;
+                    }
+                    else
+                    {
+                        LogTextBlock.Text = "購読を中止しました。";
+                        return;
+                    }
                 }
+
+                await HandleSubscribeResultAsync(result);
             }
             finally
             {
                 SearchBox.Text = "URLを入力してEnter...";
                 Mouse.OverrideCursor = null;
+            }
+        }
+
+        // 結果に応じたUI処理
+        private async Task HandleSubscribeResultAsync(SubscribeResult result)
+        {
+            switch (result)
+            {
+                case SubscribeResult.Success:
+                    LogTextBlock.Text = "フィードを追加しました。";
+                    await LoadFeedsToTreeViewAsync();
+                    break;
+
+                case SubscribeResult.SkippedOrEmpty:
+                    LogTextBlock.Text = "重複、または記事がないため購読を中止しました。";
+                    MsgBox.Show("重複、または記事がないため購読を中止しました。");
+                    break;
+
+                case SubscribeResult.Error:
+                    LogTextBlock.Text = "エラー (未対応のURL等)";
+                    MsgBox.Show("エラーで登録できません (未対応のURL等)");
+                    break;
+
+                case SubscribeResult.NoCandidates:
+                    LogTextBlock.Text = "フィードが見つかりませんでした。";
+                    MsgBox.Show("フィードが見つかりませんでした。");
+                    break;
+
+                case SubscribeResult.TooManyCandidates:
+                    LogTextBlock.Text = "購読URLが多すぎるため処理を中止しました。";
+                    MsgBox.Show("購読URLが多すぎるため処理を中止しました。");
+                    break;
             }
         }
 

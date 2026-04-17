@@ -22,7 +22,7 @@ namespace FeedGem.Services
                 using var reader = XmlReader.Create(ms);
                 var feed = SyndicationFeed.Load(reader);
 
-                if (feed != null)
+                if (feed != null && feed.Items.Any())
                 {
                     return [.. feed.Items.Select(ParseItem)];
                 }
@@ -33,6 +33,38 @@ namespace FeedGem.Services
             }
 
             // --- 2回目：RDF ---
+            ms.Position = 0;
+
+            // XMLかどうか + フィードかどうかチェック
+            try
+            {
+                ms.Position = 0;
+
+                var settings = new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Prohibit // HTMLのDOCTYPE対策
+                };
+
+                using var testReader = XmlReader.Create(ms, settings);
+
+                // ルート要素まで読む
+                testReader.MoveToContent();
+
+                string rootName = testReader.Name.ToLower();
+
+                // RSS / Atom / RDF 以外は弾く
+                if (rootName != "rss" && rootName != "feed" && rootName != "rdf")
+                {
+                    return [];
+                }
+            }
+            catch
+            {
+                // XMLですらない（HTMLなど）
+                return [];
+            }
+
+            // 位置戻す
             ms.Position = 0;
             return ParseRdf(ms);
         }

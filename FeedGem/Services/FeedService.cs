@@ -1,5 +1,6 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
+using System.Net.Http;
 
 namespace FeedGem.Services
 {
@@ -17,7 +18,30 @@ namespace FeedGem.Services
                 // --- URL補正 ---
                 string targetUrl = FeedUrlNormalizer.Normalize(url);
 
-                using var stream = await http.GetStreamAsync(targetUrl);
+                // --- レスポンス取得 ---
+                using var response = await http.GetAsync(targetUrl);
+
+                // --- ステータスコードチェック ---
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                {
+                    throw new FeedNotFoundException();
+                }
+
+                response.EnsureSuccessStatusCode();
+
+                // --- Content-Typeチェック ---
+                string mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
+
+                if (!mediaType.Contains("xml") &&
+                    !mediaType.Contains("rss") &&
+                    !mediaType.Contains("atom"))
+                {
+                    throw new Exception("RSSではないレスポンスです");
+                }
+
+                // --- Stream取得 ---
+                using var stream = await response.Content.ReadAsStreamAsync();
+
                 var articles = FeedParser.Parse(stream)
                     .OrderByDescending(a => a.Date)
                     .Take(30)
@@ -34,9 +58,13 @@ namespace FeedGem.Services
                     );
                 }
             }
-            catch (Exception ex)
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                LoggingService.Error("記事取得失敗", ex);
+                throw new FeedNotFoundException();
+            }
+            catch
+            {
+                throw;
             }
         }
 
@@ -92,5 +120,9 @@ namespace FeedGem.Services
         {
             await _repository.DeleteFolderAsync(folderPath);
         }
+    }
+
+    public class FeedNotFoundException : Exception
+    {
     }
 }

@@ -161,25 +161,37 @@ namespace FeedGem.Data
         }
 
         // フィード情報・フォルダを登録する
-        public async Task<long> AddFeedAsync(string folder, string title, string url)
+        public async Task<(long feedId, bool isNew)> AddFeedAsync(string folder, string title, string url)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // INSERT OR IGNOREを使用して事前チェックと挿入を1回のクエリに統合
-            string query = """
-                INSERT OR IGNORE INTO feeds (folder_path, title, url)
+            // --- 既存チェック ---
+            string checkQuery = "SELECT id FROM feeds WHERE url = @url;";
+            using var checkCommand = new SqliteCommand(checkQuery, connection);
+            checkCommand.Parameters.AddWithValue("@url", url);
+
+            var existing = await checkCommand.ExecuteScalarAsync();
+            if (existing != null)
+            {
+                return ((long)existing, false); // 既存
+            }
+
+            // --- 新規登録 ---
+            string insertQuery = """
+                INSERT INTO feeds (folder_path, title, url)
                 VALUES (@folder, @title, @url);
-                SELECT id FROM feeds WHERE url = @url;
+                SELECT last_insert_rowid();
                 """;
 
-            using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@folder", folder);
-            command.Parameters.AddWithValue("@title", title);
-            command.Parameters.AddWithValue("@url", url);
+            using var insertCommand = new SqliteCommand(insertQuery, connection);
+            insertCommand.Parameters.AddWithValue("@folder", folder);
+            insertCommand.Parameters.AddWithValue("@title", title);
+            insertCommand.Parameters.AddWithValue("@url", url);
 
-            var result = await command.ExecuteScalarAsync();
-            return (long)(result ?? 0);
+            var result = await insertCommand.ExecuteScalarAsync();
+
+            return ((long)(result ?? 0), true); // 新規
         }
 
         // 記事データを保存する
@@ -541,5 +553,22 @@ namespace FeedGem.Data
         public string Title { get; set; } = "";
         public string Url { get; set; } = "";
         public int SortOrder { get; set; } = 0;
+
+        // エラー状態
+        public FeedErrorState ErrorState { get; set; } = FeedErrorState.None;
+
+        // 最終成功時刻
+        public DateTime? LastSuccessTime { get; set; }
+
+        // 最終失敗時刻
+        public DateTime? LastFailureTime { get; set; }
+
+        public enum FeedErrorState
+        {
+            None,
+            NotFound404,
+            TemporaryFailure,
+            LongFailure
+        }
     }
 }

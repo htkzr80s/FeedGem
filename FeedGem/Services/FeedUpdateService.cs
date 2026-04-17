@@ -1,4 +1,5 @@
 ﻿using FeedGem.Data;
+using static FeedGem.Data.FeedInfo;
 
 namespace FeedGem.Services
 {
@@ -22,10 +23,47 @@ namespace FeedGem.Services
                     await semaphore.WaitAsync();
                     try
                     {
+                        // --- 404はスキップ ---
+                        if (feed.ErrorState == FeedErrorState.NotFound404)
+                            return;
+
                         await _feedService.FetchAndSaveEntriesAsync(feed.Id, feed.Url);
+
+                        // --- 成功 ---
+                        feed.ErrorState = FeedErrorState.None;
+                        feed.LastSuccessTime = DateTime.Now;
+                    }
+                    catch (FeedNotFoundException)
+                    {
+                        // --- 404 ---
+                        feed.ErrorState = FeedErrorState.NotFound404;
+                        feed.LastFailureTime = DateTime.Now;
+
+                        LoggingService.Error($"404: {feed.Title}", new Exception("404 Not Found"));
                     }
                     catch (Exception ex)
                     {
+                        // --- 通信エラー ---
+                        feed.LastFailureTime = DateTime.Now;
+
+                        if (feed.LastSuccessTime != null)
+                        {
+                            var diff = DateTime.Now - feed.LastSuccessTime.Value;
+
+                            if (diff.TotalHours >= 24)
+                            {
+                                feed.ErrorState = FeedErrorState.LongFailure;
+                            }
+                            else
+                            {
+                                feed.ErrorState = FeedErrorState.TemporaryFailure;
+                            }
+                        }
+                        else
+                        {
+                            feed.ErrorState = FeedErrorState.TemporaryFailure;
+                        }
+
                         LoggingService.Error($"更新失敗: {feed.Title}", ex);
                     }
                     finally
