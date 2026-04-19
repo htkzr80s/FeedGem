@@ -565,14 +565,23 @@ namespace FeedGem.Views
         // OPMLインポート
         private async Task ImportOpmlAsync()
         {
-            var dialog = new Microsoft.Win32.OpenFileDialog { Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml" };
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml"
+            };
+
             if (dialog.ShowDialog() != true) return;
+
             LogTextBlock.Text = "インポート中...";
 
             try
             {
-                int count = await _opmlService.ImportAsync(dialog.FileName);
-                LogTextBlock.Text = $"{count}件のフィードをインポートしました。";
+                var (total, added, skipped) = await _opmlService.ImportAsync(dialog.FileName);
+
+                // ・結果表示
+                LogTextBlock.Text =
+                    $"試行: {total} / 登録: {added} / スキップ: {skipped}";
+
                 await LoadFeedsToTreeViewAsync();
             }
             catch (Exception ex)

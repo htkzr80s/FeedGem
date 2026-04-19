@@ -8,13 +8,21 @@ namespace FeedGem.Services
         private readonly FeedRepository _repository = repository;
 
         // OPMLインポート
-        public async Task<int> ImportAsync(string filePath)
+        public async Task<(int total, int added, int skipped)> ImportAsync(string filePath)
         {
             var doc = XDocument.Load(filePath);
             var body = doc.Root?.Element("body");
-            if (body == null) return 0;
+            if (body == null) return (0, 0, 0);
 
-            int count = 0;
+            int total = 0;
+            int added = 0;
+            int skipped = 0;
+
+            // ・既存URL一覧を取得（高速比較用）
+            var existingFeeds = await _repository.GetAllFeedsAsync();
+            var existingUrls = new HashSet<string>(
+                existingFeeds.Select(f => FeedUrlNormalizer.Normalize(f.Url))
+            );
 
             await ProcessOutline(body.Elements("outline"), "/");
 
@@ -22,27 +30,50 @@ namespace FeedGem.Services
             {
                 foreach (var outline in elements)
                 {
-                    string title = outline.Attribute("text")?.Value ?? outline.Attribute("title")?.Value ?? "無題";
+                    string title = outline.Attribute("text")?.Value
+                                ?? outline.Attribute("title")?.Value
+                                ?? "無題";
+
                     string xmlUrl = outline.Attribute("xmlUrl")?.Value ?? "";
 
+                    // フィード
                     if (!string.IsNullOrEmpty(xmlUrl))
                     {
-                        await _repository.AddFeedAsync(currentPath, title, xmlUrl);
-                        count++;
+                        total++;
+
+                        string normalized = FeedUrlNormalizer.Normalize(xmlUrl);
+
+                        if (existingUrls.Contains(normalized))
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        // ・サブフォルダ禁止 → ルート固定
+                        string folder = "/";
+
+                        var (feedId, isNew) = await _repository.AddFeedAsync(folder, title, normalized);
+
+                        if (isNew)
+                        {
+                            added++;
+                            existingUrls.Add(normalized);
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
                     }
+                    // フォルダ
                     else if (outline.Elements("outline").Any())
                     {
-                        string nextPath = currentPath == "/" ? $"/{title}" : $"{currentPath}/{title}";
-
-                        // フォルダダミー作成
-                        await _repository.AddFeedAsync(currentPath, title, "folder://" + Guid.NewGuid());
-
-                        await ProcessOutline(outline.Elements("outline"), nextPath);
+                        // サブフォルダ禁止なので無視して中身だけ処理
+                        await ProcessOutline(outline.Elements("outline"), currentPath);
                     }
                 }
             }
 
-            return count;
+            return (total, added, skipped);
         }
 
         // OPMLエクスポート
