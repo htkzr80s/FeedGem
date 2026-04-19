@@ -100,7 +100,7 @@ namespace FeedGem.Views
 
             _backgroundTimer = new BackgroundUpdateTimer(
                 _updateService,
-                UpdateTrayIconAsync,
+                () => LoadFeedsToTreeViewAsync(),  
                 UpdateLastUpdateTime,
                 this.Dispatcher
             );

@@ -77,9 +77,14 @@ namespace FeedGem.Services
                 // フィード更新
                 await _updateService.UpdateAllAsync();
 
-                // 非同期コールバック
+                // 非同期コールバック（UIスレッドで実行）
                 if (_onAfterUpdateAsync != null)
-                    await _onAfterUpdateAsync();
+                {
+                    await _dispatcher.InvokeAsync(async () =>
+                    {
+                        await _onAfterUpdateAsync();
+                    });
+                }
 
                 // UI更新（Dispatcher経由で安全に実行）
                 if (_onTick != null)
