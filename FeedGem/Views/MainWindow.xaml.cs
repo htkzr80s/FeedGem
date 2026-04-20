@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Input = System.Windows.Input;
 using Media = System.Windows.Media;
 using MsgBox = System.Windows.MessageBox;
@@ -34,9 +35,9 @@ namespace FeedGem.Views
         private readonly UrlSubscriptionService _subscriptionService;
         private readonly BackgroundUpdateTimer _backgroundTimer;
         private long? _currentSelectedFeedId;
-        // --- トレイ関連 ---
         private readonly UnreadCountService _unreadService;
-        private readonly NotificationService _notificationService;
+        private BitmapImage? _normalTrayIcon;
+        private BitmapImage? _unreadTrayIcon;
 
         public MainWindow()
         {
@@ -60,6 +61,15 @@ namespace FeedGem.Views
 
             SetupWindowIcon();
 
+            LoadTrayIcons();
+            TaskbarIcon.TrayLeftMouseUp += TaskbarIcon_TrayLeftMouseUp;
+
+            // 初期アイコンを明示的に設定（他のプログラムと同じpack URI方式）
+            if (_normalTrayIcon != null)
+            {
+                TaskbarIcon.IconSource = _normalTrayIcon;
+            }
+
             ArticleListView.ItemsSource = currentArticles;
 
             // EXEがある場所を取得
@@ -78,7 +88,6 @@ namespace FeedGem.Views
             // リポジトリを初期化（ファイルパスを指定）
             _repository = new FeedRepository(dbPath);
             _unreadService = new UnreadCountService(_repository);
-            _notificationService = new NotificationService(RestoreWindow);
             _feedService = new FeedService(_repository);
             _updateService = new FeedUpdateService(_repository, _feedService);
             _discoveryService = new FeedDiscoveryService();
@@ -259,6 +268,19 @@ namespace FeedGem.Views
             }
         }
 
+        // pack URIでWPF用アイコンを読み込む
+        private void LoadTrayIcons()
+        {
+            _normalTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/app.ico"));
+            _unreadTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/unread.ico"));
+        }
+
+        // トレイアイコンの左クリックでウィンドウを復帰
+        private void TaskbarIcon_TrayLeftMouseUp(object sender, RoutedEventArgs e)
+        {
+            RestoreWindow();
+        }
+
         // 最小化時にトレイへ
         private void MainWindow_StateChanged(object? sender, EventArgs e)
         {
@@ -279,8 +301,6 @@ namespace FeedGem.Views
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             SaveCurrentConfig();
-
-            _notificationService?.Dispose();
             _backgroundTimer?.Dispose();
         }
 
@@ -325,10 +345,10 @@ namespace FeedGem.Views
         // 未読アイコン更新
         private async Task UpdateTrayIconAsync()
         {
-            if (_notificationService == null) return;
+            if (TaskbarIcon == null) return;
 
             int totalUnread = await _unreadService.GetTotalUnreadAsync();
-            _notificationService.UpdateUnreadState(totalUnread);
+            TaskbarIcon.IconSource = totalUnread > 0 ? _unreadTrayIcon : _normalTrayIcon;
         }
 
 

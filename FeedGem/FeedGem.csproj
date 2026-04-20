@@ -25,14 +25,20 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <EmbeddedResource Include="Resources\app.ico" />
-	  <EmbeddedResource Include="Resources\unread.ico" />
+	  <None Remove="Resources\error.ico" />
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Resource Include="Resources\app.ico" />
+	  <Resource Include="Resources\error.ico" />
+	  <Resource Include="Resources\unread.ico" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.5" />
-		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3856.49" />
-		<PackageReference Include="System.ServiceModel.Syndication" Version="10.0.5" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.6" />
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3912.50" />
+		<PackageReference Include="System.ServiceModel.Syndication" Version="10.0.6" />
 	</ItemGroup>
 </Project>
