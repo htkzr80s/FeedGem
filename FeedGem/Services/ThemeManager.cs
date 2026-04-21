@@ -10,7 +10,7 @@ namespace FeedGem.Services
 
         public static void ApplyTheme(string theme)
         {
-            var appResources = System.Windows.Application.Current.Resources.MergedDictionaries;
+            var appResources = Application.Current.Resources.MergedDictionaries;
             appResources.Clear();
 
             // Auto の場合はシステムテーマを使用

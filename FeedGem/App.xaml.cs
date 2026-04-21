@@ -7,10 +7,10 @@ using System.Windows.Media.Imaging;
 
 namespace FeedGem
 {
-    public partial class App : System.Windows.Application
+    public partial class App : Application
     {
         // 2重起動防止用のミューテックスインスタンス
-        private static System.Threading.Mutex? _mutex;
+        private static Mutex? _mutex;
 
         // Shell32.dllの関数をインポート
         [LibraryImport("shell32.dll", SetLastError = true)]
@@ -19,10 +19,10 @@ namespace FeedGem
         // アプリケーション起動時の処理
         protected override void OnStartup(StartupEventArgs e)
         {
-            _mutex = new System.Threading.Mutex(true, "Yoshino.FeedGem.App.UniqueInstance", out bool createdNew);
+            _mutex = new Mutex(true, "Yoshino.FeedGem.App.UniqueInstance", out bool createdNew);
             if (!createdNew)
             {
-                System.Windows.Application.Current.Shutdown();
+                Current.Shutdown();
                 return;
             }
 
@@ -41,40 +41,47 @@ namespace FeedGem
 
         public static void SaveConfig(AppConfig config) => ConfigManager.Save(config);
 
+        // WinForms非依存のためのWin32 API定義
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
+
+        [LibraryImport("user32.dll")]
+        private static partial IntPtr MonitorFromRect(ref RECT lprc, uint dwFlags);
+
+        private const uint MONITOR_DEFAULTTONULL = 0x00000000;
+
         // マルチモニタ対策：ウィンドウが現在どの画面にも表示されない場合にプライマリモニタ中央へ移動
         public static void EnsureWindowOnScreen(Window window)
         {
             if (window == null) return;
 
-            // 現在の全スクリーンの作業領域をチェック
-            bool isOnAnyScreen = false;
-            foreach (var screen in System.Windows.Forms.Screen.AllScreens)
+            // ウィンドウの矩形を計算（Left/Top/Width/Heightから）
+            RECT rect = new()
             {
-                // ウィンドウの左上と右下が少なくとも一部スクリーン内にあるか簡易判定
-                if (window.Left + window.Width * 0.1 >= screen.WorkingArea.Left &&
-                    window.Left + window.Width * 0.9 <= screen.WorkingArea.Right &&
-                    window.Top + window.Height * 0.1 >= screen.WorkingArea.Top &&
-                    window.Top + window.Height * 0.9 <= screen.WorkingArea.Bottom)
-                {
-                    isOnAnyScreen = true;
-                    break;
-                }
+                Left = (int)window.Left,
+                Top = (int)window.Top,
+                Right = (int)(window.Left + window.Width),
+                Bottom = (int)(window.Top + window.Height)
+            };
+
+            // MonitorFromRectで矩形が任意のモニタと交差するか確認（交差なし＝完全に画面外）
+            IntPtr hMonitor = MonitorFromRect(ref rect, MONITOR_DEFAULTTONULL);
+
+            if (hMonitor == IntPtr.Zero)
+            {
+                // プライマリモニタの作業領域中央に復帰
+                var primary = System.Windows.SystemParameters.WorkArea;
+
+                window.Left = primary.Left + (primary.Width - window.Width) / 2;
+                window.Top = primary.Top + (primary.Height - window.Height) / 2;
+                window.WindowStartupLocation = WindowStartupLocation.Manual;
             }
-
-            if (!isOnAnyScreen)
-                {
-                    // プライマリモニタの中央に復帰（nullチェックを追加）
-                    var primaryScreen = System.Windows.Forms.Screen.PrimaryScreen;
-                    if (primaryScreen != null)
-                    {
-                        var primary = primaryScreen.WorkingArea;
-
-                        window.Left = primary.Left + (primary.Width - window.Width) / 2;
-                        window.Top = primary.Top + (primary.Height - window.Height) / 2;
-                        window.WindowStartupLocation = WindowStartupLocation.Manual;
-                    }
-                    // PrimaryScreenがnullの場合（極めて稀）は何もしない（安全側）
-                }
         }
 
         // 埋め込みリソースから高DPI向けのアイコンフレームを取得する

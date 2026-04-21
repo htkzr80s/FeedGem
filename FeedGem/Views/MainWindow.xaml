@@ -28,7 +28,16 @@
                 ToolTipText="FeedGem"
                 IconSource="pack://application:,,,/Resources/app.ico"
                 MenuActivation="RightClick"
-                Visibility="Visible"/>
+                Visibility="Visible">
+                <tb:TaskbarIcon.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="表示" Click="TrayMenu_Show_Click" />
+                        <MenuItem Header="最小化" Click="TrayMenu_Minimize_Click" />
+                        <Separator />
+                        <MenuItem Header="終了" Click="TrayMenu_Exit_Click" />
+                    </ContextMenu>
+                </tb:TaskbarIcon.ContextMenu>
+            </tb:TaskbarIcon>
 
             <TreeView x:Name="FeedTreeView" Grid.Column="0" Margin="5" 
                       Background="{DynamicResource ControlBackgroundBrush}"

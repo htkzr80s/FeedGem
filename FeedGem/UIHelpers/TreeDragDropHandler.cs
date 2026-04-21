@@ -4,10 +4,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using Input = System.Windows.Input;
-using WpfDragDropEffects = System.Windows.DragDropEffects;
-using WpfDragEventArgs = System.Windows.DragEventArgs;
-using WpfPoint = System.Windows.Point;
 
 namespace FeedGem.UIHelpers
 {
@@ -16,7 +12,7 @@ namespace FeedGem.UIHelpers
         private readonly FeedRepository _repository = repository;
         private readonly Func<Task> _reloadTree = reloadTree;
 
-        private WpfPoint _startPoint;
+        private Point _startPoint;
         private TreeViewItem? _dragSourceItem;
 
         // ドラッグ開始位置記録
@@ -26,33 +22,33 @@ namespace FeedGem.UIHelpers
         }
 
         // ドラッグ開始判定
-        public void OnMouseMove(object sender, Input.MouseEventArgs e)
+        public void OnMouseMove(object sender, MouseEventArgs e)
         {
             if (e.LeftButton != MouseButtonState.Pressed) return;
 
-            WpfPoint pos = e.GetPosition(null);
+            Point pos = e.GetPosition(null);
             Vector diff = _startPoint - pos;
 
-            if (System.Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-                System.Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
+            if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
+                Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
             {
                 var item = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
                 if (item == null) return;
 
                 _dragSourceItem = item;
-                DragDrop.DoDragDrop(item, item, WpfDragDropEffects.Move);
+                DragDrop.DoDragDrop(item, item, DragDropEffects.Move);
             }
         }
 
         // ドラッグ中
-        public static void OnDragOver(WpfDragEventArgs e)
+        public static void OnDragOver(DragEventArgs e)
         {
-            e.Effects = WpfDragDropEffects.Move;
+            e.Effects = DragDropEffects.Move;
             e.Handled = true;
         }
 
         // ドロップ処理
-        public async Task OnDrop(object sender, WpfDragEventArgs e)
+        public async Task OnDrop(object sender, DragEventArgs e)
         {
             if (_dragSourceItem?.Tag is not TreeTag sourceTag) return;
 

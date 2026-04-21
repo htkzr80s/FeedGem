@@ -3,8 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Media = System.Windows.Media;
-using Wpf = System.Windows.Controls;
 
 namespace FeedGem.UIHelpers
 {
@@ -22,7 +20,7 @@ namespace FeedGem.UIHelpers
             {
                 Margin = new Thickness(0, 1, 0, 1),
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
-                Background = Media.Brushes.Transparent
+                Background = Brushes.Transparent
             };
 
             // カラム定義（アイコン + テキスト）
@@ -36,7 +34,7 @@ namespace FeedGem.UIHelpers
                 var icon = new TextBlock
                 {
                     Text = "\uE8B7",
-                    FontFamily = new Media.FontFamily("Segoe MDL2 Assets"),
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
                     FontSize = 16,
                     Margin = new Thickness(0, 0, 5, 0),
                     VerticalAlignment = VerticalAlignment.Center
@@ -49,7 +47,7 @@ namespace FeedGem.UIHelpers
             }
             else
             {
-                var image = new Wpf.Image
+                var image = new Image
                 {
                     Width = 16,
                     Height = 16,

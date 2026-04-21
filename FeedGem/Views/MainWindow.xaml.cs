@@ -10,11 +10,6 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using Input = System.Windows.Input;
-using Media = System.Windows.Media;
-using MsgBox = System.Windows.MessageBox;
-using WpfDragEventArgs = System.Windows.DragEventArgs;
 
 namespace FeedGem.Views
 {
@@ -35,9 +30,8 @@ namespace FeedGem.Views
         private readonly UrlSubscriptionService _subscriptionService;
         private readonly BackgroundUpdateTimer _backgroundTimer;
         private long? _currentSelectedFeedId;
+        private readonly TrayIconManager _trayManager;
         private readonly UnreadCountService _unreadService;
-        private BitmapImage? _normalTrayIcon;
-        private BitmapImage? _unreadTrayIcon;
 
         public MainWindow()
         {
@@ -61,14 +55,7 @@ namespace FeedGem.Views
 
             SetupWindowIcon();
 
-            LoadTrayIcons();
-            TaskbarIcon.TrayLeftMouseUp += TaskbarIcon_TrayLeftMouseUp;
-
-            // 初期アイコンを明示的に設定（他のプログラムと同じpack URI方式）
-            if (_normalTrayIcon != null)
-            {
-                TaskbarIcon.IconSource = _normalTrayIcon;
-            }
+            this.StateChanged += MainWindow_StateChanged;
 
             ArticleListView.ItemsSource = currentArticles;
 
@@ -95,6 +82,8 @@ namespace FeedGem.Views
             _opmlService = new OpmlService(_repository);
             _subscriptionService = new UrlSubscriptionService(_repository, _feedService);
 
+            _trayManager = new TrayIconManager(TaskbarIcon, this, _unreadService);
+
             _menuBuilder = new ContextMenuBuilder(
                 _repository,
                 _feedService,
@@ -118,8 +107,6 @@ namespace FeedGem.Views
                 _repository,
                 LoadFeedsToTreeViewAsync
             );
-
-            this.StateChanged += MainWindow_StateChanged;
 
             // テーマ変更イベントを購読
             ThemeManager.ThemeChanged += OnThemeChanged;
@@ -146,7 +133,7 @@ namespace FeedGem.Views
                 currentArticles.Clear();
 
                 // トレイアイコンと最終更新日時を更新
-                await UpdateTrayIconAsync();
+                await _trayManager.UpdateIconAsync();
                 UpdateLastUpdateTime();
 
                 // バックグラウンドでの更新処理を開始
@@ -268,34 +255,40 @@ namespace FeedGem.Views
             }
         }
 
-        // pack URIでWPF用アイコンを読み込む
-        private void LoadTrayIcons()
+        // 最小化時にトレイへ格納する
+        private void MainWindow_StateChanged(object? sender, EventArgs? e)
         {
-            _normalTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/app.ico"));
-            _unreadTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/unread.ico"));
-        }
-
-        // トレイアイコンの左クリックでウィンドウを復帰
-        private void TaskbarIcon_TrayLeftMouseUp(object sender, RoutedEventArgs e)
-        {
-            RestoreWindow();
-        }
-
-        // 最小化時にトレイへ
-        private void MainWindow_StateChanged(object? sender, EventArgs e)
-        {
+            // 最小化されたでトレイに格納
             if (this.WindowState == WindowState.Minimized)
             {
-                this.Hide(); // タスクバーから消える
+                _trayManager.HandleMinimizeToTray();
             }
         }
 
         // ウィンドウ復帰
-        private void RestoreWindow()
+        public void RestoreWindow()
         {
             this.Show();
             this.WindowState = WindowState.Normal;
             this.Activate();
+        }
+
+        // トレイメニューの「表示」がクリックされた時の処理
+        private void TrayMenu_Show_Click(object sender, RoutedEventArgs e)
+        {
+            RestoreWindow();
+        }
+
+        // トレイメニューの「最小化」がクリックされた時の処理
+        private void TrayMenu_Minimize_Click(object sender, RoutedEventArgs e)
+        {
+            this.WindowState = WindowState.Minimized;
+        }
+
+        // トレイメニューの「終了」がクリックされた時の処理
+        private void TrayMenu_Exit_Click(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Shutdown();
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -342,16 +335,6 @@ namespace FeedGem.Views
             App.SaveConfig(config);  // App経由でConfigManagerに投げる
         }
 
-        // 未読アイコン更新
-        private async Task UpdateTrayIconAsync()
-        {
-            if (TaskbarIcon == null) return;
-
-            int totalUnread = await _unreadService.GetTotalUnreadAsync();
-            TaskbarIcon.IconSource = totalUnread > 0 ? _unreadTrayIcon : _normalTrayIcon;
-        }
-
-
         // 記事リストの選択が変更された際の処理
         private async void ArticleListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -361,7 +344,7 @@ namespace FeedGem.Views
                 if (!selectedArticle.IsRead)
                 {
                     await _feedService.MarkArticleAsReadAsync(selectedArticle);
-                    await UpdateTrayIconAsync();
+                    await _trayManager.UpdateIconAsync();
                     // ツリーを再構築して未読数を即反映
                     await UpdateUnreadCountsAsync();
                 }
@@ -395,12 +378,12 @@ namespace FeedGem.Views
             if (SearchBox.Text == "URLを入力してEnter...")
             {
                 SearchBox.Text = ""; // ヒント文字を消す
-                SearchBox.Foreground = (Media.Brush)FindResource("TextBrush");
+                SearchBox.Foreground = (Brush)FindResource("TextBrush");
             }
         }
 
         // テキストボックス（SearchBox）でキーが押された時の処理
-        private async void SearchBox_KeyDown(object sender, Input.KeyEventArgs e)
+        private async void SearchBox_KeyDown(object sender, KeyEventArgs e)
         {
             // Enterキーが押されたか確認
             if (e.Key == Key.Enter)
@@ -476,22 +459,22 @@ namespace FeedGem.Views
 
                 case SubscribeResult.SkippedOrEmpty:
                     LogTextBlock.Text = "重複、または記事がないため購読を中止しました。";
-                    MsgBox.Show("重複、または記事がないため購読を中止しました。");
+                    MessageBox.Show("重複、または記事がないため購読を中止しました。");
                     break;
 
                 case SubscribeResult.Error:
                     LogTextBlock.Text = "エラー (未対応のURL等)";
-                    MsgBox.Show("エラーで登録できません (未対応のURL等)");
+                    MessageBox.Show("エラーで登録できません (未対応のURL等)");
                     break;
 
                 case SubscribeResult.NoCandidates:
                     LogTextBlock.Text = "フィードが見つかりませんでした。";
-                    MsgBox.Show("フィードが見つかりませんでした。");
+                    MessageBox.Show("フィードが見つかりませんでした。");
                     break;
 
                 case SubscribeResult.TooManyCandidates:
                     LogTextBlock.Text = "購読URLが多すぎるため処理を中止しました。";
-                    MsgBox.Show("購読URLが多すぎるため処理を中止しました。");
+                    MessageBox.Show("購読URLが多すぎるため処理を中止しました。");
                     break;
             }
         }
@@ -502,7 +485,7 @@ namespace FeedGem.Views
             if (FilterBox.Text == "記事を検索...")
             {
                 FilterBox.Text = "";
-                FilterBox.Foreground = (Media.Brush)FindResource("TextBrush");
+                FilterBox.Foreground = (Brush)FindResource("TextBrush");
             }
         }
 
@@ -607,7 +590,7 @@ namespace FeedGem.Views
             catch (Exception ex)
             {
                 LoggingService.Error("OPMLインポート失敗", ex);
-                MsgBox.Show($"インポート失敗: {ex.Message}");
+                MessageBox.Show($"インポート失敗: {ex.Message}");
             }
         }
 
@@ -628,7 +611,7 @@ namespace FeedGem.Views
             {
                 LogTextBlock.Text = "エクスポートに失敗しました。";
                 LoggingService.Error("OPMLエクスポート失敗", ex);
-                MsgBox.Show($"エクスポート失敗: {ex.Message}");
+                MessageBox.Show($"エクスポート失敗: {ex.Message}");
             }
         }
 
@@ -695,19 +678,19 @@ namespace FeedGem.Views
         }
 
         // マウス移動時にドラッグを開始する
-        private void FeedTreeView_PreviewMouseMove(object sender, Input.MouseEventArgs e)
+        private void FeedTreeView_PreviewMouseMove(object sender, MouseEventArgs e)
         {
             _dragHandler.OnMouseMove(sender, e);
         }
 
         // ドラッグ中のマウスカーソル状態
-        private void FeedTreeView_DragOver(object sender, WpfDragEventArgs e)
+        private void FeedTreeView_DragOver(object sender, DragEventArgs e)
         {
             TreeDragDropHandler.OnDragOver(e);
         }
 
         // ドロップされた時の処理
-        private async void FeedTreeView_Drop(object sender, WpfDragEventArgs e)
+        private async void FeedTreeView_Drop(object sender, DragEventArgs e)
         {
             await _dragHandler.OnDrop(sender, e);
         }
@@ -739,7 +722,7 @@ namespace FeedGem.Views
             }
 
             // トレイアイコン更新
-            await UpdateTrayIconAsync();
+            await _trayManager.UpdateIconAsync();
         }
 
         // TreeViewItemに選択イベントを再帰的に付与する
