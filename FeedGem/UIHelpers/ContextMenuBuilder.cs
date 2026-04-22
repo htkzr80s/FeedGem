@@ -87,6 +87,27 @@ namespace FeedGem.UIHelpers
             renameItem.Click += async (s, e) => await Rename(treeViewItem);
             menu.Items.Add(renameItem);
 
+            // TreeViewItemのTagからカスタムデータ（TreeTag）を取得
+            var tag = treeViewItem.Tag as TreeTag;
+
+            // URLをコピーするメニュー項目の作成
+            var copyUrlItem = new MenuItem { Header = "URLをコピー" };
+
+            // クリックイベントの定義
+            copyUrlItem.Click += (s, e) =>
+            {
+                // TagにURLが存在するか確認
+                if (!string.IsNullOrEmpty(tag?.Url))
+                {
+                    // Windowsのクリップボードにテキストをセット
+                    Clipboard.SetText(tag.Url);
+                    _log.Text = $"URLをコピーしました: {tag.Url}";
+                }
+            };
+            menu.Items.Add(copyUrlItem);
+
+            menu.Items.Add(new Separator());
+
             var deleteFeedItem = new MenuItem
             {
                 Header = "このフィードを削除",

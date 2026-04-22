@@ -19,7 +19,7 @@ namespace FeedGem.UIHelpers
             var panel = new Grid
             {
                 Margin = new Thickness(0, 1, 0, 1),
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Stretch,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 Background = Brushes.Transparent
             };
 

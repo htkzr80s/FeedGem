@@ -420,7 +420,7 @@ namespace FeedGem.Views
 
             try
             {
-                Mouse.OverrideCursor = System.Windows.Input.Cursors.Wait;
+                Mouse.OverrideCursor = Cursors.Wait;
                 LogTextBlock.Text = "フィードを探索中...";
 
                 var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
@@ -471,9 +471,14 @@ namespace FeedGem.Views
                     await LoadFeedsToTreeViewAsync();
                     break;
 
+                case SubscribeResult.AlreadySubscribed:
+                    LogTextBlock.Text = "既に登録済みのため中止しました。";
+                    MessageBox.Show("既に登録済みです。");
+                    break;
+
                 case SubscribeResult.SkippedOrEmpty:
-                    LogTextBlock.Text = "重複、または記事がないため購読を中止しました。";
-                    MessageBox.Show("重複、または記事がないため購読を中止しました。");
+                    LogTextBlock.Text = "未対応のURLのため購読を中止しました。";
+                    MessageBox.Show("未対応のURLのため購読を中止しました。");
                     break;
 
                 case SubscribeResult.Error:

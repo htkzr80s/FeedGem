@@ -13,6 +13,7 @@ namespace FeedGem.Services
         NoCandidates,
         TooManyCandidates,
         SkippedOrEmpty,
+        AlreadySubscribed,
         Canceled,
         Error
     }
@@ -71,6 +72,12 @@ namespace FeedGem.Services
 
                 // --- 登録 ---
                 (feedId, isNew) = await _repository.AddFeedAsync("/", title, candidate.Url);
+
+                // --- 既に登録済みかチェック ---
+                if (!isNew)
+                {
+                    return SubscribeResult.AlreadySubscribed;
+                }
 
                 // --- 記事取得 ---
                 await _feedService.FetchAndSaveEntriesAsync(feedId, candidate.Url);
