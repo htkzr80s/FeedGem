@@ -763,15 +763,20 @@ namespace FeedGem.Views
             }
         }
 
-        // 指定したフィードの記事を中央ペイン（リストビュー）に読み込む
+        // 指定したフィードの記事を中央ペインに読み込む
         private async Task LoadEntriesToListViewAsync(long feedId)
         {
+            ArticleListView.ItemsSource = null;
+
             currentArticles.Clear();
+
             var articles = await _repository.GetEntriesByFeedIdAsync(feedId);
+
             foreach (var article in articles)
             {
                 currentArticles.Add(article);
             }
+            ArticleListView.ItemsSource = currentArticles;
         }
 
         private async Task RefreshCurrentArticleListAsync()
