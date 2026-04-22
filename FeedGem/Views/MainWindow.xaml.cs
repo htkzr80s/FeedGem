@@ -15,6 +15,11 @@ namespace FeedGem.Views
 {
     public partial class MainWindow : Window
     {
+        // アプリケーション設定用の定数
+        private const string UserDataFolderName = "UserData";
+        private const string DatabaseFileName = "feedgem.db";
+        private const int SkeletonLoaderCount = 5;
+
         private readonly ObservableCollection<ArticleItem> currentArticles = [];
 
         // データベース操作を専門に行うインスタンス
@@ -37,42 +42,11 @@ namespace FeedGem.Views
         {
             InitializeComponent();
 
-            // Configからウィンドウ設定を読み込み、位置・サイズ・カラム幅を復元
-            var config = App.LoadConfig();
-            this.Left = config.WindowLeft;
-            this.Top = config.WindowTop;
-            this.Width = config.WindowWidth;
-            this.Height = config.WindowHeight;
-            colFeedTree.Width = new GridLength(config.FeedTreeWidth);
-            colArticleList.Width = new GridLength(config.ArticleListWidth);
+            // UIとウィンドウの初期設定を行う
+            SetupWindowAppearance();
 
-            // XAMLでx:Nameを付けたColumnDefinitionに幅を復元
-            colFeedTree?.Width = new GridLength(config.FeedTreeWidth);
-            colArticleList?.Width = new GridLength(config.ArticleListWidth);
-
-            // マルチモニタ対策：ウィンドウが表示されない位置ならプライマリ中央へ
-            App.EnsureWindowOnScreen(this);
-
-            SetupWindowIcon();
-
-            this.StateChanged += MainWindow_StateChanged;
-
-            ArticleListView.ItemsSource = currentArticles;
-
-            // EXEがある場所を取得
-            string baseDir = AppContext.BaseDirectory;
-            string userDataDir = Path.Combine(baseDir, "UserData");
-
-            // フォルダが存在しなければ作成
-            if (!Directory.Exists(userDataDir))
-            {
-                Directory.CreateDirectory(userDataDir);
-            }
-
-            // ファイルのフルパスを生成
-            string dbPath = Path.Combine(userDataDir, "feedgem.db");
-
-            // リポジトリを初期化（ファイルパスを指定）
+            // データベースパスの決定とサービスの初期化を行う
+            string dbPath = EnsureAndGetDatabasePath();
             _repository = new FeedRepository(dbPath);
             _unreadService = new UnreadCountService(_repository);
             _feedService = new FeedService(_repository);
@@ -108,11 +82,50 @@ namespace FeedGem.Views
                 LoadFeedsToTreeViewAsync
             );
 
-            // テーマ変更イベントを購読
+            // 各種イベントの購読と設定
+            this.StateChanged += MainWindow_StateChanged;
+            ArticleListView.ItemsSource = currentArticles;
             ThemeManager.ThemeChanged += OnThemeChanged;
 
             // ウィンドウのUI描画が完了した時のイベントを登録
             this.Loaded += MainWindow_Loaded;
+        }
+
+        // ウィンドウの位置やサイズ、アイコンの初期設定
+        private void SetupWindowAppearance()
+        {
+            // Configからウィンドウ設定を読み込み、位置・サイズ・カラム幅を復元
+            var config = App.LoadConfig();
+            this.Left = config.WindowLeft;
+            this.Top = config.WindowTop;
+            this.Width = config.WindowWidth;
+            this.Height = config.WindowHeight;
+
+            // XAMLでx:Nameを付けたColumnDefinitionに幅を復元
+            colFeedTree?.Width = new GridLength(config.FeedTreeWidth);
+            colArticleList?.Width = new GridLength(config.ArticleListWidth);
+
+            // マルチモニタ対策：ウィンドウが表示されない位置ならプライマリ中央へ
+            App.EnsureWindowOnScreen(this);
+
+            SetupWindowIcon();
+        }
+
+        // ユーザーデータフォルダを確認し、データベースのフルパスを返す
+        private static string EnsureAndGetDatabasePath()
+        {
+            // EXEがある場所を取得
+            string baseDir = AppContext.BaseDirectory;
+            string userDataDir = Path.Combine(baseDir, UserDataFolderName);
+
+            // フォルダが存在しなければ作成
+            if (!Directory.Exists(userDataDir))
+            {
+                Directory.CreateDirectory(userDataDir);
+            }
+
+            // ファイルのフルパスを生成して返す
+            return Path.Combine(userDataDir, DatabaseFileName);
         }
 
         // ウィンドウの描画が完了した後に呼ばれるイベント
@@ -157,8 +170,9 @@ namespace FeedGem.Views
         private void ShowSkeletonLoaders()
         {
             currentArticles.Clear();
-            // 5つほど「読み込み中」状態のダミーデータを追加
-            for (int i = 0; i < 5; i++)
+
+            // 定数で指定した回数分、読み込み中状態のダミーデータを追加
+            for (int i = 0; i < SkeletonLoaderCount; i++)
             {
                 currentArticles.Add(new ArticleItem
                 {
@@ -210,7 +224,7 @@ namespace FeedGem.Views
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"ナビゲーション時のテーマ適用エラー: {ex.Message}");
+                        Debug.WriteLine($"ナビゲーション時のテーマ適用エラー: {ex.Message}");
                     }     
                 };
 
@@ -219,15 +233,15 @@ namespace FeedGem.Views
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"WebView2 initialization failed: {ex.Message}");
+                Debug.WriteLine($"WebView2 initialization failed: {ex.Message}");
 
-                System.Windows.MessageBox.Show(
+                MessageBox.Show(
                     "Failed to load the browser component.\n" +
                     "If the problem persists, please reinstall the Microsoft Edge WebView2 Runtime.\n\n" +
                     "https://developer.microsoft.com/microsoft-edge/webview2/",
                     "WebView2 Initialization Failed",
-                    System.Windows.MessageBoxButton.OK,
-                    System.Windows.MessageBoxImage.Warning);
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
             }
         }
 
