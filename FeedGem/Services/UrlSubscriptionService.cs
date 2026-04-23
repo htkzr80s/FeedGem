@@ -1,5 +1,6 @@
 ﻿using FeedGem.Data;
 using FeedGem.Models;
+using System.IO;
 using System.ServiceModel.Syndication;
 using System.Xml;
 
@@ -18,16 +19,15 @@ namespace FeedGem.Services
         Error
     }
 
-    public class UrlSubscriptionService(FeedRepository repository, FeedService feedService)
+    public class UrlSubscriptionService(FeedRepository repository)
     {
-        private readonly FeedRepository _repository = repository;
-        private readonly FeedService _feedService = feedService;
+        private readonly FeedRepository _repository = repository; 
 
         public async Task<SubscribeResult> HandleCandidatesAsync(List<FeedCandidate> candidates)
         {
             if (candidates.Count == 0) return SubscribeResult.NoCandidates;
 
-            if (candidates.Count >= 7) return SubscribeResult.TooManyCandidates;
+            if (candidates.Count > 10) return SubscribeResult.TooManyCandidates;
 
             if (candidates.Count == 1) return await AddFeedAsync(candidates[0]);
 
@@ -45,15 +45,19 @@ namespace FeedGem.Services
             {
                 string title = candidate.OriginalTitle;
 
+                var http = HttpClientProvider.Client;
+                using var stream = await http.GetStreamAsync(candidate.Url);
+
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+
                 // 空ならフィードから取得
                 if (string.IsNullOrWhiteSpace(title))
                 {
                     try
                     {
-                        var http = HttpClientProvider.Client;
-                        using var stream = await http.GetStreamAsync(candidate.Url);
-
-                        using var reader = XmlReader.Create(stream);
+                        ms.Position = 0;
+                        using var reader = XmlReader.Create(ms);
                         var feed = SyndicationFeed.Load(reader);
 
                         title = feed?.Title?.Text ?? "";
@@ -79,16 +83,19 @@ namespace FeedGem.Services
                     return SubscribeResult.AlreadySubscribed;
                 }
 
-                // --- 記事取得 ---
-                await _feedService.FetchEntriesAsync(feedId, candidate.Url);
+                // パース
+                ms.Position = 0;
+                var parsedItems = FeedParser.Parse(ms);
 
-                // --- 空チェック ---
-                var entries = await _repository.GetEntriesByFeedIdAsync(feedId);
-                if (entries.Count == 0)
+                // 1件も取れなければ無効扱い
+                if (parsedItems.Count == 0)
                 {
                     await _repository.DeleteFeedAsync(feedId);
                     return SubscribeResult.SkippedOrEmpty;
                 }
+
+                // --- DB保存 ---
+                await _repository.SaveEntriesAsync(feedId, parsedItems);
 
                 return SubscribeResult.Success;
             }

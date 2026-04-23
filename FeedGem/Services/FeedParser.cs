@@ -11,17 +11,19 @@ namespace FeedGem.Services
         // フィード解析（RSS / Atom / RDF）
         public static List<ArticleItem> Parse(Stream stream)
         {
-            // --- ストリームをメモリにコピー ---
+            // ストリームをメモリにコピー
             using var ms = new MemoryStream();
             stream.CopyTo(ms);
 
-            // --- 1回目：RSS / Atom ---
+            // --- RSS / Atom を先に試す ---
             try
             {
                 ms.Position = 0;
+
                 using var reader = XmlReader.Create(ms);
                 var feed = SyndicationFeed.Load(reader);
 
+                // アイテムが取得できた場合のみ採用する
                 if (feed != null && feed.Items.Any())
                 {
                     return [.. feed.Items.Select(ParseItem)];
@@ -29,42 +31,10 @@ namespace FeedGem.Services
             }
             catch
             {
-                // 無視してRDFへ
+                // RSS/Atom解析失敗は無視してRDFへ進む
             }
 
-            // --- 2回目：RDF ---
-            ms.Position = 0;
-
-            // XMLかどうか + フィードかどうかチェック
-            try
-            {
-                ms.Position = 0;
-
-                var settings = new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Prohibit // HTMLのDOCTYPE対策
-                };
-
-                using var testReader = XmlReader.Create(ms, settings);
-
-                // ルート要素まで読む
-                testReader.MoveToContent();
-
-                string rootName = testReader.Name.ToLower();
-
-                // RSS / Atom / RDF 以外は弾く
-                if (rootName != "rss" && rootName != "feed" && rootName != "rdf")
-                {
-                    return [];
-                }
-            }
-            catch
-            {
-                // XMLですらない（HTMLなど）
-                return [];
-            }
-
-            // 位置戻す
+            // --- RDF を試す（必ず実行される） ---
             ms.Position = 0;
             return ParseRdf(ms);
         }
@@ -127,28 +97,37 @@ namespace FeedGem.Services
         {
             var list = new List<ArticleItem>();
 
-            // ストリームの読み取り位置を先頭に戻す
-            if (stream.CanSeek) stream.Position = 0;
+            if (stream.CanSeek)
+                stream.Position = 0;
 
             var doc = XDocument.Load(stream);
-            XNamespace ns = "http://purl.org/rss/1.0/";
-            XNamespace dc = "http://purl.org/dc/elements/1.1/";
 
-            // channel内のitems/Seqではなく、ルート直下のitem要素を直接取得する
-            var items = doc.Root?.Elements(ns + "item") ?? doc.Descendants(ns + "item");
+            // 名前空間に依存せず item を取得する
+            var items = doc.Descendants()
+                           .Where(e => e.Name.LocalName == "item");
 
             foreach (var node in items)
             {
-                string title = node.Element(ns + "title")?.Value ?? "";
-                string link = node.Element(ns + "link")?.Value ?? "";
-                string desc = node.Element(ns + "description")?.Value ?? "";
+                // タイトル
+                string title = node.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "title")?.Value ?? "";
+
+                // リンク
+                string link = node.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "link")?.Value ?? "";
+
+                // 説明
+                string desc = node.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "description")?.Value ?? "";
 
                 if (string.IsNullOrEmpty(desc))
                 {
                     desc = $"<a href='{link}'>記事を開く</a>";
                 }
 
-                string dateVal = node.Element(dc + "date")?.Value ?? "";
+                // 日付（dc:date対応）
+                string dateVal = node.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "date")?.Value ?? "";
 
                 DateTime published = DateTimeOffset.TryParse(dateVal, out var parsed)
                     ? parsed.DateTime

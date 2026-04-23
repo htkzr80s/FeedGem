@@ -54,7 +54,7 @@ namespace FeedGem.Views
             _discoveryService = new FeedDiscoveryService();
             _treeBuilder = new TreeBuilder(_repository);
             _opmlService = new OpmlService(_repository);
-            _subscriptionService = new UrlSubscriptionService(_repository, _feedService);
+            _subscriptionService = new UrlSubscriptionService(_repository);
 
             _trayManager = new TrayIconManager(TaskbarIcon, this, _unreadService);
 
