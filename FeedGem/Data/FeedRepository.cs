@@ -195,30 +195,30 @@ namespace FeedGem.Data
         }
 
         // 記事データを保存する
-        public async Task SaveEntryAsync(long feedId, string title, string url, string summary, DateTime pubDate)
+        public async Task SaveEntriesAsync(long feedId, List<ArticleItem> articles)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            string insertQuery = """
-                INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
-                VALUES (@feedId, @title, @url, @summary, @pubDate)
-                """;
-            using var command = new SqliteCommand(insertQuery, connection);
-            command.Parameters.AddWithValue("@feedId", feedId);
-            command.Parameters.AddWithValue("@title", title);
-            command.Parameters.AddWithValue("@url", url);
-            command.Parameters.AddWithValue("@summary", summary);
-            command.Parameters.AddWithValue("@pubDate", pubDate);
+            using var transaction = await connection.BeginTransactionAsync();
 
-            // INSERT実行
-            var rows = await command.ExecuteNonQueryAsync();
-
-            // 挿入されなかった場合（重複など）
-            if (rows == 0)
+            foreach (var article in articles)
             {
-                Console.WriteLine($"[Info] 既存記事のためスキップ: {url}");
+                string insertQuery = """
+            INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
+            VALUES (@feedId, @title, @url, @summary, @pubDate)
+            """;
+                using var command = new SqliteCommand(insertQuery, connection);
+                command.Parameters.AddWithValue("@feedId", feedId);
+                command.Parameters.AddWithValue("@title", article.Title);
+                command.Parameters.AddWithValue("@url", article.Url);
+                command.Parameters.AddWithValue("@summary", article.Summary);
+                command.Parameters.AddWithValue("@pubDate", article.Date);
+                command.Transaction = (SqliteTransaction)transaction;
+                await command.ExecuteNonQueryAsync();
             }
+
+            await transaction.CommitAsync();
         }
 
         // 記事を既読状態（is_read = 1）に更新する
@@ -315,7 +315,7 @@ namespace FeedGem.Data
 
             using var command = connection.CreateCommand();
             command.CommandText = """
-                UPDATE Entries
+                UPDATE entries
                 SET is_read = 1
                 WHERE feed_id = @feedId;
                 """;
@@ -519,29 +519,6 @@ namespace FeedGem.Data
 
             using var deleteCmd = new SqliteCommand(deleteQuery, connection);
             await deleteCmd.ExecuteNonQueryAsync();
-        }
-
-        // 指定フィードの既存記事URL一覧を取得する
-        public async Task<HashSet<string>> GetEntryUrlsAsync(long feedId)
-        {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-
-            string query = "SELECT url FROM entries WHERE feed_id = @feedId";
-            using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@feedId", feedId);
-
-            using var reader = await command.ExecuteReaderAsync();
-
-            var urls = new HashSet<string>();
-
-            // URL一覧をHashSetに格納（高速検索用）
-            while (await reader.ReadAsync())
-            {
-                urls.Add(reader.GetString(0));
-            }
-
-            return urls;
         }
     }
 

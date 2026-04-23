@@ -80,7 +80,7 @@ namespace FeedGem.Services
                 }
 
                 // --- 記事取得 ---
-                await _feedService.FetchAndSaveEntriesAsync(feedId, candidate.Url);
+                await _feedService.FetchEntriesAsync(feedId, candidate.Url);
 
                 // --- 空チェック ---
                 var entries = await _repository.GetEntriesByFeedIdAsync(feedId);

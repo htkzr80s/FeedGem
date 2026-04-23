@@ -9,7 +9,7 @@ namespace FeedGem.Services
         private readonly FeedRepository _repository = repository;
 
         // フィード取得＆記事保存
-        public async Task FetchAndSaveEntriesAsync(long feedId, string url)
+        public async Task FetchEntriesAsync(long feedId, string url)
         {
             var http = HttpClientProvider.Client;
 
@@ -47,16 +47,7 @@ namespace FeedGem.Services
                     .Take(30)
                     .ToList();
 
-                foreach (var article in articles)
-                {
-                    await _repository.SaveEntryAsync(
-                        feedId,
-                        article.Title,
-                        article.Url,
-                        article.Summary,
-                        article.Date
-                    );
-                }
+                await _repository.SaveEntriesAsync(feedId, articles);
             }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {

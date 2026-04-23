@@ -27,7 +27,7 @@ namespace FeedGem.Services
                         if (feed.ErrorState == FeedErrorState.NotFound404)
                             return;
 
-                        await _feedService.FetchAndSaveEntriesAsync(feed.Id, feed.Url);
+                        await _feedService.FetchEntriesAsync(feed.Id, feed.Url);
 
                         // --- 成功 ---
                         feed.ErrorState = FeedErrorState.None;
@@ -81,7 +81,7 @@ namespace FeedGem.Services
         // 単体更新（将来UIから使える）
         public async Task UpdateSingleAsync(long feedId, string url)
         {
-            await _feedService.FetchAndSaveEntriesAsync(feedId, url);
+            await _feedService.FetchEntriesAsync(feedId, url);
             await _repository.DeleteOldEntriesAsync();
         }
     }
