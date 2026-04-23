@@ -1,5 +1,4 @@
 ﻿using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -7,8 +6,6 @@ namespace FeedGem.Services
 {
     public static partial class ArticleHtmlService
     {
-        private static readonly HttpClient _httpClient = new();
-
         // scriptタグ削除用
         [GeneratedRegex("<script[^>]*>.*?</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
         private static partial Regex ScriptTagRegex();

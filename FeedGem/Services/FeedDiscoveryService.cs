@@ -1,5 +1,6 @@
 ﻿using FeedGem.Models;
 using HtmlAgilityPack;
+using System.Net.Http;
 using System.ServiceModel.Syndication;
 using System.Xml;
 
@@ -7,6 +8,11 @@ namespace FeedGem.Services
 {
     public class FeedDiscoveryService
     {
+        private static readonly HttpClient _discoveryClient = new()
+        {
+            Timeout = TimeSpan.FromSeconds(10)
+        };
+
         // フィード候補を探す
         public static async Task<List<FeedCandidate>> DiscoverFeedsAsync(string url)
         {
@@ -15,10 +21,7 @@ namespace FeedGem.Services
             // 1. 入力されたURLそのものをフィードとして試す
             try
             {
-                var http = HttpClientProvider.Client;
-                http.Timeout = TimeSpan.FromSeconds(10);
-
-                var stream = await http.GetStreamAsync(url);
+                var stream = await _discoveryClient.GetStreamAsync(url);
                 using var reader = XmlReader.Create(stream);
 
                 var feed = SyndicationFeed.Load(reader);
