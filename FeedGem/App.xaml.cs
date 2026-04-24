@@ -1,4 +1,5 @@
-﻿using FeedGem.Services;
+﻿using FeedGem.Core;
+using FeedGem.Services;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -37,7 +38,25 @@ namespace FeedGem
 
         // ConfigManagerへの呼び出しをApp.xaml.csで一元化
         // MainWindowや今後の設定メニューは必ずここを経由してConfigManagerに投げる
-        public static AppConfig LoadConfig() => ConfigManager.Load();
+        public static AppConfig LoadConfig()
+        {
+            var config = ConfigManager.Load();
+
+            // AppConfig と AppSettings の同名プロパティに自動で反映
+            var configProps = typeof(AppConfig).GetProperties();
+            var settingsProps = typeof(AppSettings).GetProperties();
+
+            foreach (var cp in configProps)
+            {
+                var sp = settingsProps.FirstOrDefault(p => p.Name == cp.Name);
+                if (sp == null) continue;
+
+                // AppConfig の値を AppSettings の同名プロパティにセット
+                sp.SetValue(null, cp.GetValue(config));
+            }
+
+            return config;
+        }
 
         public static void SaveConfig(AppConfig config) => ConfigManager.Save(config);
 

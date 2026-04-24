@@ -3,6 +3,7 @@ using FeedGem.Models;
 using System.IO;
 using System.ServiceModel.Syndication;
 using System.Xml;
+using FeedGem.Core;
 
 namespace FeedGem.Services
 {
@@ -27,7 +28,7 @@ namespace FeedGem.Services
         {
             if (candidates.Count == 0) return SubscribeResult.NoCandidates;
 
-            if (candidates.Count > 10) return SubscribeResult.TooManyCandidates;
+            if (candidates.Count > AppSettings.MaxCandidateCount) return SubscribeResult.TooManyCandidates;
 
             if (candidates.Count == 1) return await AddFeedAsync(candidates[0]);
 

@@ -1,4 +1,5 @@
-﻿using FeedGem.Data;
+﻿using FeedGem.Core;
+using FeedGem.Data;
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.UIHelpers;
@@ -15,11 +16,6 @@ namespace FeedGem.Views
 {
     public partial class MainWindow : Window
     {
-        // アプリケーション設定用の定数
-        private const string UserDataFolderName = "UserData";
-        private const string DatabaseFileName = "feedgem.db";
-        private const int SkeletonLoaderCount = 5;
-
         private readonly ObservableCollection<ArticleItem> currentArticles = [];
 
         // データベース操作を専門に行うインスタンス
@@ -116,7 +112,7 @@ namespace FeedGem.Views
         {
             // EXEがある場所を取得
             string baseDir = AppContext.BaseDirectory;
-            string userDataDir = Path.Combine(baseDir, UserDataFolderName);
+            string userDataDir = Path.Combine(baseDir, AppConstants.UserDataFolderName);
 
             // フォルダが存在しなければ作成
             if (!Directory.Exists(userDataDir))
@@ -125,7 +121,7 @@ namespace FeedGem.Views
             }
 
             // ファイルのフルパスを生成して返す
-            return Path.Combine(userDataDir, DatabaseFileName);
+            return Path.Combine(userDataDir, AppConstants.DatabaseFileName);
         }
 
         // ウィンドウの描画が完了した後に呼ばれるイベント
@@ -172,7 +168,7 @@ namespace FeedGem.Views
             currentArticles.Clear();
 
             // 定数で指定した回数分、読み込み中状態のダミーデータを追加
-            for (int i = 0; i < SkeletonLoaderCount; i++)
+            for (int i = 0; i < AppConstants.SkeletonLoaderCount; i++)
             {
                 currentArticles.Add(new ArticleItem
                 {

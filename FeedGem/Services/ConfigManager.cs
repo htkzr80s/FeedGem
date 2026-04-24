@@ -1,14 +1,13 @@
+using FeedGem.Core;
 using System.IO;
 
 namespace FeedGem.Services
 {
     public class ConfigManager
     {
-        // データベースと同じUserDataフォルダを定義
-        private static readonly string UserDataDirectory = Path.Combine(AppContext.BaseDirectory, "UserData");
+        private static readonly string UserDataDirectory = Path.Combine(AppContext.BaseDirectory, AppConstants.UserDataFolderName);
 
-        // ConfigPathをUserData配下に変更
-        private static readonly string ConfigPath = Path.Combine(UserDataDirectory, "FeedGem.ini");
+        private static readonly string ConfigPath = Path.Combine(UserDataDirectory, AppConstants.ConfigFileName);
 
         // 設定を読み込む（存在しなければデフォルト値を返す）
         public static AppConfig Load()
@@ -30,9 +29,12 @@ namespace FeedGem.Services
             try
             {
                 var lines = File.ReadAllLines(ConfigPath);
+                // AppConfig のプロパティ一覧を取得
+                var props = typeof(AppConfig).GetProperties();
+
                 foreach (var line in lines)
                 {
-                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';')) continue;
+                    if (string.IsNullOrWhiteSpace(line) || line.StartsWith(';') || line.StartsWith('[')) continue;
 
                     var parts = line.Split('=', 2);
                     if (parts.Length != 2) continue;
@@ -40,30 +42,17 @@ namespace FeedGem.Services
                     var key = parts[0].Trim();
                     var value = parts[1].Trim();
 
-                    switch (key)
+                    // キー名と一致するプロパティを探して値をセット
+                    var prop = props.FirstOrDefault(p => p.Name == key);
+                    if (prop == null) continue;
+
+                    try
                     {
-                        case "Theme":
-                            config.Theme = value;
-                            break;
-                        case "WindowLeft":
-                            if (double.TryParse(value, out double left)) config.WindowLeft = left;
-                            break;
-                        case "WindowTop":
-                            if (double.TryParse(value, out double top)) config.WindowTop = top;
-                            break;
-                        case "WindowWidth":
-                            if (double.TryParse(value, out double width)) config.WindowWidth = width;
-                            break;
-                        case "WindowHeight":
-                            if (double.TryParse(value, out double height)) config.WindowHeight = height;
-                            break;
-                        case "FeedTreeWidth":
-                            if (double.TryParse(value, out double treeW)) config.FeedTreeWidth = treeW;
-                            break;
-                        case "ArticleListWidth":
-                            if (double.TryParse(value, out double listW)) config.ArticleListWidth = listW;
-                            break;
+                        // プロパティの型に合わせて変換してセット
+                        var converted = Convert.ChangeType(value, prop.PropertyType);
+                        prop.SetValue(config, converted);
                     }
+                    catch { /* 変換失敗時はデフォルト値のまま */ }
                 }
             }
             catch { /* 読み込み失敗時はデフォルト */ }
@@ -78,20 +67,17 @@ namespace FeedGem.Services
                 if (!Directory.Exists(UserDataDirectory))
                     Directory.CreateDirectory(UserDataDirectory);
 
-                var content = $@"[FeedGem]
-                    ; Theme (Auto / Dark / Light)
-                    Theme={config.Theme}
+                // AppConfig のプロパティ一覧を自動で書き出す
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("[FeedGem]");
 
-                    ; ウィンドウ位置・サイズ
-                    WindowLeft={config.WindowLeft}
-                    WindowTop={config.WindowTop}
-                    WindowWidth={config.WindowWidth}
-                    WindowHeight={config.WindowHeight}
+                foreach (var prop in typeof(AppConfig).GetProperties())
+                {
+                    // プロパティ名=値 の形式で書き出す
+                    sb.AppendLine($"{prop.Name}={prop.GetValue(config)}");
+                }
 
-                    ; カラム幅
-                    FeedTreeWidth={config.FeedTreeWidth}
-                    ArticleListWidth={config.ArticleListWidth}
-                    ";
+                var content = sb.ToString();
 
                 File.WriteAllText(ConfigPath, content);
             }
@@ -109,5 +95,7 @@ namespace FeedGem.Services
         public double WindowHeight { get; set; } = 800;
         public double FeedTreeWidth { get; set; } = 250;
         public double ArticleListWidth { get; set; } = 450;
+        public int MaxCandidateCount { get; set; } = 10;
+        public int MaxArticleCount { get; set; } = 30;
     }
 }

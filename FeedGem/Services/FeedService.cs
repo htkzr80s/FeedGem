@@ -1,4 +1,5 @@
 ﻿using FeedGem.Data;
+using FeedGem.Core;
 using FeedGem.Models;
 using System.Net.Http;
 
@@ -44,7 +45,7 @@ namespace FeedGem.Services
 
                 var articles = FeedParser.Parse(stream, targetUrl)
                     .OrderByDescending(a => a.Date)
-                    .Take(30)
+                    .Take(AppSettings.MaxArticleCount)
                     .ToList();
 
                 await _repository.SaveEntriesAsync(feedId, articles);

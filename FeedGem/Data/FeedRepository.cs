@@ -1,4 +1,5 @@
-﻿using FeedGem.Models;
+﻿using FeedGem.Core;
+using FeedGem.Models;
 using Microsoft.Data.Sqlite;
 
 namespace FeedGem.Data
@@ -500,20 +501,20 @@ namespace FeedGem.Data
             }
         }
 
-        // 古い記事を削除し、各フィード最新30件のみを保持する
+        // 古い記事を削除し、各フィード最新{AppSettings.MaxArticleCount}件のみを保持する
         public async Task DeleteOldEntriesAsync()
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // ROW_NUMBER関数を使用して、各フィードの最新30件以外を一括削除する
-            string deleteQuery = """
+            // ROW_NUMBER関数を使用して、各フィードの最新{AppSettings.MaxArticleCount}件以外を一括削除する
+            string deleteQuery = $"""
                 DELETE FROM entries 
                 WHERE id IN (
                     SELECT id FROM (
                         SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY published_date DESC) as rn 
                         FROM entries
-                    ) WHERE rn > 30
+                    ) WHERE rn > {AppSettings.MaxArticleCount}
                 )
                 """;
 
