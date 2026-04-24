@@ -42,7 +42,7 @@ namespace FeedGem.Services
                 // --- Stream取得 ---
                 using var stream = await response.Content.ReadAsStreamAsync();
 
-                var articles = FeedParser.Parse(stream)
+                var articles = FeedParser.Parse(stream, targetUrl)
                     .OrderByDescending(a => a.Date)
                     .Take(30)
                     .ToList();

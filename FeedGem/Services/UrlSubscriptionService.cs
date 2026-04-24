@@ -85,7 +85,7 @@ namespace FeedGem.Services
 
                 // パース
                 ms.Position = 0;
-                var parsedItems = FeedParser.Parse(ms);
+                var parsedItems = FeedParser.Parse(ms, candidate.Url);
 
                 // 1件も取れなければ無効扱い
                 if (parsedItems.Count == 0)

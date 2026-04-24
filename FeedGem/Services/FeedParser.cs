@@ -8,8 +8,24 @@ namespace FeedGem.Services
 {
     public static class FeedParser
     {
+        // URL解決（relative → absolute）
+        private static string ResolveUrl(string baseUrl, string relativeUrl)
+        {
+            if (string.IsNullOrEmpty(relativeUrl))
+                return baseUrl;
+
+            // すでに絶対URLならそのまま
+            if (Uri.TryCreate(relativeUrl, UriKind.Absolute, out var absolute))
+                return absolute.ToString();
+
+            if (Uri.TryCreate(new Uri(baseUrl), relativeUrl, out var resolved))
+                return resolved.ToString();
+
+            return relativeUrl;
+        }
+
         // フィード解析（RSS / Atom / RDF）
-        public static List<ArticleItem> Parse(Stream stream)
+        public static List<ArticleItem> Parse(Stream stream, string baseUrl)
         {
             // ストリームをメモリにコピー
             using var ms = new MemoryStream();
@@ -26,7 +42,7 @@ namespace FeedGem.Services
                 // アイテムが取得できた場合のみ採用する
                 if (feed != null && feed.Items.Any())
                 {
-                    return [.. feed.Items.Select(ParseItem)];
+                    return [.. feed.Items.Select(item => ParseItem(item, baseUrl))];
                 }
             }
             catch
@@ -36,14 +52,18 @@ namespace FeedGem.Services
 
             // --- RDF を試す（必ず実行される） ---
             ms.Position = 0;
-            return ParseRdf(ms);
+            return ParseRdf(ms, baseUrl);
         }
 
         // RSS / Atom の1記事解析
-        private static ArticleItem ParseItem(SyndicationItem item)
+        private static ArticleItem ParseItem(SyndicationItem item, string baseUrl)
         {
             string title = item.Title?.Text ?? "";
-            string link = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
+
+            // 元URL取得
+            string rawLink = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
+
+            string link = ResolveUrl(baseUrl, rawLink);
 
             // 本文取得
             string summary = "";
@@ -93,7 +113,7 @@ namespace FeedGem.Services
         }
 
         // RDF解析
-        private static List<ArticleItem> ParseRdf(Stream stream)
+        private static List<ArticleItem> ParseRdf(Stream stream, string baseUrl)
         {
             var list = new List<ArticleItem>();
 
@@ -113,8 +133,10 @@ namespace FeedGem.Services
                     .FirstOrDefault(e => e.Name.LocalName == "title")?.Value ?? "";
 
                 // リンク
-                string link = node.Elements()
+                string rawLink = node.Elements()
                     .FirstOrDefault(e => e.Name.LocalName == "link")?.Value ?? "";
+
+                string link = ResolveUrl(baseUrl, rawLink);
 
                 // 説明
                 string desc = node.Elements()
