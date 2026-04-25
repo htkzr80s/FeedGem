@@ -36,7 +36,13 @@ namespace FeedGem.Services
             {
                 ms.Position = 0;
 
-                using var reader = XmlReader.Create(ms);
+                var settings = new XmlReaderSettings
+                {
+                    DtdProcessing = DtdProcessing.Ignore,
+                    XmlResolver = null
+                };
+
+                using var reader = XmlReader.Create(ms, settings);
                 var feed = SyndicationFeed.Load(reader);
 
                 // アイテムが取得できた場合のみ採用する
@@ -77,14 +83,28 @@ namespace FeedGem.Services
                 {
                     using var readerExt = encodedExt.GetReader();
                     var element = XElement.Load(readerExt);
-                    summary = element.Value;
+                    summary = element.HasElements
+                        ? string.Concat(element.Nodes())
+                        : element.Value;
                 }
                 catch { }
             }
 
-            if (string.IsNullOrEmpty(summary) && item.Content is TextSyndicationContent content)
+            if (string.IsNullOrEmpty(summary) && item.Content is TextSyndicationContent textContent)
             {
-                summary = content.Text;
+                summary = textContent.Text;
+            }
+            else if (string.IsNullOrEmpty(summary) && item.Content is XmlSyndicationContent xmlContent)
+            {
+                try
+                {
+                    using var readerExt = xmlContent.GetReaderAtContent();
+                    var element = XElement.Load(readerExt);
+                    summary = element.HasElements
+                        ? string.Concat(element.Nodes())
+                        : element.Value;
+                }
+                catch { }
             }
 
             if (string.IsNullOrEmpty(summary))

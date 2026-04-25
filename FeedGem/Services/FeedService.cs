@@ -33,9 +33,11 @@ namespace FeedGem.Services
                 // --- Content-Typeチェック ---
                 string mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
 
-                if (!mediaType.Contains("xml") &&
+                if (!string.IsNullOrEmpty(mediaType) &&
+                    !mediaType.Contains("xml") &&
                     !mediaType.Contains("rss") &&
-                    !mediaType.Contains("atom"))
+                    !mediaType.Contains("atom") &&
+                    !mediaType.Contains("html"))
                 {
                     throw new Exception("RSSではないレスポンスです");
                 }
@@ -47,6 +49,11 @@ namespace FeedGem.Services
                     .OrderByDescending(a => a.Date)
                     .Take(AppSettings.MaxArticleCount)
                     .ToList();
+
+                if (articles.Count == 0)
+                {
+                    throw new Exception("RSSではないレスポンスです");
+                }
 
                 await _repository.SaveEntriesAsync(feedId, articles);
             }

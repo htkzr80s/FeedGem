@@ -33,13 +33,19 @@ namespace FeedGem.Services
             // ・http → https 統一
             result = HttpRegex().Replace(result, "https://");
 
-            // ・小文字化（比較安定）
-            result = result.ToLowerInvariant();
+            if (!Uri.TryCreate(result, UriKind.Absolute, out var uri))
+            {
+                return result;
+            }
 
-            // ・サイト別補正（クエリ除去より先に行う）
-            result = ApplySiteSpecificRules(result);
+            var builder = new UriBuilder(uri)
+            {
+                Scheme = Uri.UriSchemeHttps,
+                Port = uri.IsDefaultPort ? -1 : uri.Port,
+                Host = uri.Host.ToLowerInvariant()
+            };
 
-            // ・クエリの選別（許可リスト以外を除去）
+            result = ApplySiteSpecificRules(builder);
             result = FilterQuery(result);
 
             // ・末尾スラッシュ削除
@@ -74,59 +80,54 @@ namespace FeedGem.Services
         }
 
         // サイト固有のURL補正を適用する
-        private static string ApplySiteSpecificRules(string url)
+        private static string ApplySiteSpecificRules(UriBuilder builder)
         {
-            // FC2ブログ対応
-            if (url.Contains("blog.fc2.com"))
-            {
-                // ?xml のみ付与（これだけで十分）
-                if (!url.Contains("?xml"))
-                    url = url.TrimEnd('/') + "/?xml";
+            string host = builder.Host.ToLowerInvariant();
+            string path = builder.Path.TrimEnd('/');
 
-                // &all は付与しない（不安定要因になるため）
+            if (host.EndsWith("blog.fc2.com"))
+            {
+                builder.Path = "/";
+                builder.Query = "xml";
+                return builder.Uri.ToString();
             }
 
-            // Blogger / Blogspot 対応（Python Insiderなど）
-            // 例: pythoninsider.blogspot.com → フィードパスに変換する
-            else if (url.Contains(".blogspot."))
+            if (host.Contains(".blogspot."))
             {
-                url = NormalizeBlogspot(url);
+                if (!path.Contains("/feeds/posts", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.Path = "/feeds/posts/default";
+                    builder.Query = "";
+                }
+
+                return builder.Uri.ToString();
             }
 
-            // はてなブログ対応
-            // 例: xxx.hatenablog.com → /feed を付与する
-            else if (url.Contains(".hatenablog.com") ||
-                     url.Contains(".hateblo.jp"))
+            if (host.EndsWith(".hatenablog.com") || host.EndsWith(".hateblo.jp"))
             {
-                if (!url.Contains("/feed") && !url.Contains("/rss"))
-                    url = url.TrimEnd('/') + "/feed";
+                if (!path.Contains("/feed", StringComparison.OrdinalIgnoreCase) &&
+                    !path.Contains("/rss", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.Path = "/feed";
+                    builder.Query = "";
+                }
+
+                return builder.Uri.ToString();
             }
 
-            // livedoor ブログ対応
-            else if (url.Contains("blog.livedoor.jp"))
+            if (host.Contains("blog.livedoor.jp"))
             {
-                if (!url.Contains("/index.rdf") && !url.Contains("/atom.xml"))
-                    url = url.TrimEnd('/') + "/index.rdf";
+                if (!path.Contains("/index.rdf", StringComparison.OrdinalIgnoreCase) &&
+                    !path.Contains("/atom.xml", StringComparison.OrdinalIgnoreCase))
+                {
+                    builder.Path = "/index.rdf";
+                    builder.Query = "";
+                }
+
+                return builder.Uri.ToString();
             }
 
-            return url;
-        }
-
-        // Blogspotのトップ/記事URLをAtomフィードURLに変換する
-        private static string NormalizeBlogspot(string url)
-        {
-            // すでにフィードパスなら何もしない
-            if (url.Contains("/feeds/posts"))
-                return url;
-
-            // 記事URLのパスを除いてトップに戻す
-            // 例: pythoninsider.blogspot.com/2024/01/xxx.html
-            //   → pythoninsider.blogspot.com
-            var uri = new Uri(url);
-            string root = uri.Scheme + "://" + uri.Host;
-
-            // Blogger標準のAtomフィードパスを付与する
-            return root + "/feeds/posts/default";
+            return builder.Uri.ToString();
         }
     }
 }
