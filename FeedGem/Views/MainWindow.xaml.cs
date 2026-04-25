@@ -355,8 +355,7 @@ namespace FeedGem.Views
                 {
                     await _feedService.MarkArticleAsReadAsync(selectedArticle);
                     await _trayManager.UpdateIconAsync();
-                    // ツリーを再構築して未読数を即反映
-                    await UpdateUnreadCountsAsync();
+                    await LoadFeedsToTreeViewAsync();
                 }
 
                 // ヘルパークラスを使ってHTMLを生成する
