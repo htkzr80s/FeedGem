@@ -18,57 +18,72 @@ namespace FeedGem.Services
             int added = 0;
             int skipped = 0;
 
-            // ・既存URL一覧を取得（高速比較用）
+            // 既存URLをハッシュセットで取得し、高速に重複チェックを行う
             var existingFeeds = await _repository.GetAllFeedsAsync();
             var existingUrls = new HashSet<string>(
                 existingFeeds.Select(f => FeedUrlNormalizer.Normalize(f.Url))
             );
 
+            // インポート処理を開始する。初期フォルダはルートとする
             await ProcessOutline(body.Elements("outline"), "/");
 
             async Task ProcessOutline(IEnumerable<XElement> elements, string currentPath)
             {
                 foreach (var outline in elements)
                 {
+                    // text属性またはtitle属性から名称を取得。どちらもなければ「無題」とする
                     string title = outline.Attribute("text")?.Value
                                 ?? outline.Attribute("title")?.Value
                                 ?? "無題";
 
                     string xmlUrl = outline.Attribute("xmlUrl")?.Value ?? "";
 
-                    // フィード
+                    // xmlUrl属性が存在する場合はフィードとして処理
                     if (!string.IsNullOrEmpty(xmlUrl))
                     {
                         total++;
 
                         string normalized = FeedUrlNormalizer.Normalize(xmlUrl);
 
+                        // 登録済みURLであればスキップ
                         if (existingUrls.Contains(normalized))
                         {
                             skipped++;
                             continue;
                         }
 
-                        // ・サブフォルダ禁止 → ルート固定
-                        string folder = "/";
-
-                        var (feedId, isNew) = await _repository.AddFeedAsync(folder, title, normalized);
+                        // 決定されたcurrentPath（ルートまたは第一階層フォルダ）を使用して保存
+                        var (feedId, isNew) = await _repository.AddFeedAsync(currentPath, title, normalized);
 
                         if (isNew)
                         {
                             added++;
-                            existingUrls.Add(normalized);
+                            existingUrls.Add(normalized); // 同一インポート内での重複防止
                         }
                         else
                         {
                             skipped++;
                         }
                     }
-                    // フォルダ
+                    // 子要素を持つ場合はフォルダとして処理
                     else if (outline.Elements("outline").Any())
                     {
-                        // サブフォルダ禁止なので無視して中身だけ処理
-                        await ProcessOutline(outline.Elements("outline"), currentPath);
+                        string nextPath;
+
+                        // 現在がルート（/）の場合のみ、新しいフォルダ階層を認める
+                        if (currentPath == "/")
+                        {
+                            // 第一階層のフォルダ名をパスとして設定
+                            nextPath = title;
+                        }
+                        else
+                        {
+                            // すでにフォルダ内の場合は、サブフォルダを作らず現在のフォルダパスを維持
+                            nextPath = currentPath;
+                        }
+
+                        // 再帰的に中身を処理。階層が深くなってもnextPathは第一階層のまま固定される
+                        await ProcessOutline(outline.Elements("outline"), nextPath);
                     }
                 }
             }

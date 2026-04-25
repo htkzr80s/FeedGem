@@ -68,6 +68,7 @@ namespace FeedGem.Services
                     }
                     finally
                     {
+                        await _repository.UpdateFeedStatusAsync(feed);
                         semaphore.Release();
                     }
                 });
