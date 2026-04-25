@@ -9,16 +9,8 @@ namespace FeedGem.Services
         // 全フィードの未読件数を合計する
         public async Task<int> GetTotalUnreadAsync()
         {
-            var feeds = await _repository.GetAllFeedsAsync();
-
-            int total = 0;
-
-            foreach (var f in feeds)
-            {
-                total += await _repository.GetUnreadCountAsync(f.Id);
-            }
-
-            return total;
+            var map = await _repository.GetUnreadCountMapAsync();
+            return map.Values.Sum();
         }
     }
 }

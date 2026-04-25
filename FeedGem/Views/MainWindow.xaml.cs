@@ -802,7 +802,7 @@ namespace FeedGem.Views
         {
             if (item.Tag is TreeTag tag && tag.Type == TreeNodeType.Feed && tag.FeedId != null)
             {
-                int unread = await _repository.GetUnreadCountAsync(tag.FeedId.Value);
+                int unread = await _repository.GetUnreadCountByFeedIdAsync(tag.FeedId.Value);
 
                 // 差分があるときだけ更新
                 if (tag.UnreadCount != unread)

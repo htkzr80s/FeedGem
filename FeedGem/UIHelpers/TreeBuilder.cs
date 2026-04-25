@@ -13,11 +13,12 @@ namespace FeedGem.UIHelpers
             var result = new List<TreeNodeModel>();
 
             var feeds = await _repository.GetAllFeedsAsync();
+            var unreadMap = await _repository.GetUnreadCountMapAsync();
             var folderNodes = new Dictionary<string, TreeNodeModel>();
 
             foreach (var feed in feeds)
             {
-                var pathParts = feed.FolderPath.Split(['/'], System.StringSplitOptions.RemoveEmptyEntries);
+                var pathParts = feed.FolderPath.Split(['/'], StringSplitOptions.RemoveEmptyEntries);
                 TreeNodeModel? parent = null;
                 string currentKey = "";
 
@@ -74,8 +75,7 @@ namespace FeedGem.UIHelpers
                     Name = feed.Title,
                     FeedId = feed.Id,
                     Url = feed.Url,
-                    // 未読数を取得
-                    UnreadCount = await _repository.GetUnreadCountAsync(feed.Id)
+                    UnreadCount = unreadMap.TryGetValue(feed.Id, out var count) ? count : 0
                 };
 
                 if (parent == null)

@@ -206,9 +206,10 @@ namespace FeedGem.Data
             foreach (var article in articles)
             {
                 string insertQuery = """
-            INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
-            VALUES (@feedId, @title, @url, @summary, @pubDate)
-            """;
+                    INSERT OR IGNORE INTO entries (feed_id, title, url, summary, published_date)
+                    VALUES (@feedId, @title, @url, @summary, @pubDate)
+                    """;
+
                 using var command = new SqliteCommand(insertQuery, connection);
                 command.Parameters.AddWithValue("@feedId", feedId);
                 command.Parameters.AddWithValue("@title", article.Title);
@@ -263,7 +264,7 @@ namespace FeedGem.Data
         }
 
         // 指定したフィードの未読記事数を取得する
-        public async Task<int> GetUnreadCountAsync(long feedId)
+        public async Task<int> GetUnreadCountByFeedIdAsync(long feedId)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
@@ -276,6 +277,35 @@ namespace FeedGem.Data
             // ExecuteScalarAsyncで結果の最初の1行1列（カウント数）を取得
             var result = await command.ExecuteScalarAsync();
             return Convert.ToInt32(result); // int型に変換して返す
+        }
+
+        public async Task<Dictionary<long, int>> GetUnreadCountMapAsync()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string query = """
+                SELECT feed_id, COUNT(*) as count
+                FROM entries
+                WHERE is_read = 0
+                GROUP BY feed_id
+                """;
+
+            using var command = new SqliteCommand(query, connection);
+
+            var result = new Dictionary<long, int>();
+
+            using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync())
+            {
+                long feedId = reader.GetInt64(0);
+                int count = reader.GetInt32(1);
+
+                result[feedId] = count;
+            }
+
+            return result;
         }
 
         // フィード情報を更新する（タイトルやフォルダ、URLの変更用）
