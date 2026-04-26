@@ -1,5 +1,6 @@
 ﻿using FeedGem.Core;
 using FeedGem.Services;
+using FeedGem.Views;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -31,9 +32,14 @@ namespace FeedGem
             SetCurrentProcessExplicitAppUserModelID("Yoshino.FeedGem.App.v1");
             base.OnStartup(e);
 
-            // 起動時に現在のテーマを適用
+            // テーマを先に適用してからMainWindowを生成する
             var config = LoadConfig();
             ThemeManager.ApplyTheme(config.Theme);
+
+            // テーマ適用後にMainWindowを生成・表示
+            var mainWindow = new MainWindow();
+            Current.MainWindow = mainWindow;
+            mainWindow.Show();
         }
 
         // ConfigManagerへの呼び出しをApp.xaml.csで一元化

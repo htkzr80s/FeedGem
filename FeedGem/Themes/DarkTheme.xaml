@@ -12,7 +12,7 @@
 
     <SolidColorBrush x:Key="SplitterBrush" Color="#3E3E42"/>
     <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>
-
+    <SolidColorBrush x:Key="ButtonHoverBrush" Color="#454545" />
     <SolidColorBrush x:Key="DangerBrush" Color="#FF5F5F"/>
 
     <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#264F78"/>
@@ -68,9 +68,6 @@
             </Setter.Value>
         </Setter>
     </Style>
-
-    <!-- Button用ホバー背景（ダークテーマ用） -->
-    <SolidColorBrush x:Key="ButtonHoverBrush" Color="#454545" />
 
     <!-- ListView -->
     <Style TargetType="ListView">
@@ -210,6 +207,13 @@
     <!-- GridSplitter -->
     <Style TargetType="GridSplitter">
         <Setter Property="Background" Value="{DynamicResource SplitterBrush}" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="GridSplitter">
+                    <Border Background="{TemplateBinding Background}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- TextBlock（LogTextBlockや日時表示など） -->
