@@ -244,8 +244,8 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 子フォルダも含めるパターン
-            string childPattern = folderPath + "/%";
+            // UIから渡されるパスを正規化
+            string targetPath = folderPath.Trim('\\', '/');
 
             string updateQuery = """
                 UPDATE entries
@@ -253,14 +253,17 @@ namespace FeedGem.Data
                 WHERE feed_id IN (
                     SELECT id FROM feeds
                     WHERE 
-                        (folder_path = @path OR folder_path LIKE @child)
+                        (
+                            folder_path = @path OR 
+                            folder_path LIKE @child ESCAPE '#'
+                        )
                         AND url NOT LIKE 'folder://%'
                 )
                 """;
 
             using var command = new SqliteCommand(updateQuery, connection);
-            command.Parameters.AddWithValue("@path", folderPath);
-            command.Parameters.AddWithValue("@child", childPattern);
+            command.Parameters.AddWithValue("@path", targetPath);
+            command.Parameters.AddWithValue("@child", targetPath + "\\%"); // 子階層用
 
             await command.ExecuteNonQueryAsync();
         }

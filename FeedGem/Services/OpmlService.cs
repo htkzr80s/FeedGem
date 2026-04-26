@@ -31,58 +31,31 @@ namespace FeedGem.Services
             {
                 foreach (var outline in elements)
                 {
-                    // text属性またはtitle属性から名称を取得。どちらもなければ「無題」とする
-                    string title = outline.Attribute("text")?.Value
+                    string title = (outline.Attribute("text")?.Value
                                 ?? outline.Attribute("title")?.Value
-                                ?? "無題";
-
+                                ?? "無題").Trim();
                     string xmlUrl = outline.Attribute("xmlUrl")?.Value ?? "";
 
-                    // xmlUrl属性が存在する場合はフィードとして処理
                     if (!string.IsNullOrEmpty(xmlUrl))
                     {
                         total++;
-
                         string normalized = FeedUrlNormalizer.Normalize(xmlUrl);
+                        if (existingUrls.Contains(normalized)) { skipped++; continue; }
 
-                        // 登録済みURLであればスキップ
-                        if (existingUrls.Contains(normalized))
-                        {
-                            skipped++;
-                            continue;
-                        }
+                        // 保存する際は、常に先頭にスラッシュを付けない形式で統一
+                        string savePath = currentPath.Trim('/');
+                        var (feedId, isNew) = await _repository.AddFeedAsync(savePath, title, normalized);
 
-                        // 決定されたcurrentPath（ルートまたは第一階層フォルダ）を使用して保存
-                        var (feedId, isNew) = await _repository.AddFeedAsync(currentPath, title, normalized);
-
-                        if (isNew)
-                        {
-                            added++;
-                            existingUrls.Add(normalized); // 同一インポート内での重複防止
-                        }
-                        else
-                        {
-                            skipped++;
-                        }
+                        if (isNew) { added++; existingUrls.Add(normalized); }
+                        else { skipped++; }
                     }
-                    // 子要素を持つ場合はフォルダとして処理
-                    else if (outline.Elements("outline").Any())
+                    else
                     {
-                        string nextPath;
+                        // 子要素がある場合はフォルダとして扱う
+                        // 階層を深くする場合に備えて、パスを連結していく
+                        string cleanTitle = title.Replace("/", "").Trim();
+                        string nextPath = currentPath == "/" ? cleanTitle : $"{currentPath}/{cleanTitle}";
 
-                        // 現在がルート（/）の場合のみ、新しいフォルダ階層を認める
-                        if (currentPath == "/")
-                        {
-                            // 第一階層のフォルダ名をパスとして設定
-                            nextPath = title;
-                        }
-                        else
-                        {
-                            // すでにフォルダ内の場合は、サブフォルダを作らず現在のフォルダパスを維持
-                            nextPath = currentPath;
-                        }
-
-                        // 再帰的に中身を処理。階層が深くなってもnextPathは第一階層のまま固定される
                         await ProcessOutline(outline.Elements("outline"), nextPath);
                     }
                 }
@@ -94,8 +67,10 @@ namespace FeedGem.Services
         // OPMLエクスポート
         public async Task<XDocument> ExportAsync()
         {
+            // 全フィードを取得
             var feeds = await _repository.GetAllFeedsAsync();
 
+            // XMLのルート構造を作成
             var root = new XElement("opml",
                 new XAttribute("version", "2.0"),
                 new XElement("head", new XElement("title", "FeedGem Export")),
@@ -104,25 +79,34 @@ namespace FeedGem.Services
             var body = root.Element("body");
             if (body == null) return new XDocument(root);
 
-            var folders = feeds.GroupBy(f => f.FolderPath);
+            // フォルダパスの前後の空白やスラッシュを整理してグループ化
+            // これにより、表記の揺れによるフォルダの重複を防ぐ
+            var folders = feeds.GroupBy(f => f.FolderPath.Trim().Trim('/') switch
+            {
+                "" => "/", // 空文字やスラッシュのみはルートとして扱う
+                var path => path
+            });
 
             foreach (var folder in folders)
             {
                 XContainer target = body;
 
+                // ルート以外（特定のフォルダ名がある場合）はフォルダノードを作成
                 if (folder.Key != "/")
                 {
                     var folderNode = new XElement("outline",
-                        new XAttribute("text", folder.Key.TrimStart('/')));
+                        new XAttribute("text", folder.Key)); // すでに正規化済みのためそのまま使用
 
                     body.Add(folderNode);
-                    target = folderNode;
+                    target = folderNode; // 以降のフィードはこのフォルダの中に追加する
                 }
 
                 foreach (var f in folder)
                 {
+                    // フォルダ自身を示す特殊なURLはエクスポートから除外
                     if (f.Url.StartsWith("folder://")) continue;
 
+                    // フィード情報の追加
                     target.Add(new XElement("outline",
                         new XAttribute("text", f.Title),
                         new XAttribute("title", f.Title),
