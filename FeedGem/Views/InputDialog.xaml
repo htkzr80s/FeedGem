@@ -1,13 +1,14 @@
 ﻿<Window x:Class="FeedGem.Views.InputDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="入力"
+        Title="Input"
         Height="150"
         Width="300"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{DynamicResource WindowBackgroundBrush}"
-        Foreground="{DynamicResource TextBrush}">
+        Foreground="{DynamicResource TextBrush}"
+        KeyDown="Window_KeyDown">
 
     <StackPanel Margin="10">
 

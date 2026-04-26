@@ -25,5 +25,17 @@ namespace FeedGem.Views
         {
             DialogResult = false;
         }
+
+        private void Window_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                DialogResult = true;
+            }
+            else if (e.Key == System.Windows.Input.Key.Escape)
+            {
+                DialogResult = false;
+            }
+        }
     }
 }
