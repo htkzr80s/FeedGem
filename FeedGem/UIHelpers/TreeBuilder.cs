@@ -75,8 +75,18 @@ namespace FeedGem.UIHelpers
                     Name = feed.Title,
                     FeedId = feed.Id,
                     Url = feed.Url,
-                    UnreadCount = unreadMap.TryGetValue(feed.Id, out var count) ? count : 0
+                    UnreadCount = unreadMap.TryGetValue(feed.Id, out var count) ? count : 0,
+                    ErrorState = feed.ErrorState
                 };
+
+
+
+                // デバッグ：ErrorStateが正しく詰まっているか確認する
+                System.Diagnostics.Debug.WriteLine(
+                    $"[TreeBuilder] {feed.Title} / ErrorState={feed.ErrorState}");
+                // デバッグ：ErrorStateが正しく詰まっているか確認する
+
+
 
                 if (parent == null)
                     result.Add(feedNode);

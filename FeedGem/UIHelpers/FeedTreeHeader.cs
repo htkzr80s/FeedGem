@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using FeedGem.Data;
+using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -13,7 +14,11 @@ namespace FeedGem.UIHelpers
         private static partial Regex UnreadRegex();
 
         // ヘッダUI生成
-        public static FrameworkElement Create(string text, bool isFolder, string? url = null)
+        public static FrameworkElement Create(
+            string text,
+            bool isFolder,
+            string? url = null,
+            FeedInfo.FeedErrorState errorState = FeedInfo.FeedErrorState.None)
         {
             // ルートパネル（行全体をクリック可能にするためGridに変更）
             var panel = new Grid
@@ -23,7 +28,7 @@ namespace FeedGem.UIHelpers
                 Background = Brushes.Transparent
             };
 
-            // カラム定義（アイコン + テキスト）
+            // カラム定義（ファビコン列 + テキスト＋警告アイコンをまとめた列）
             panel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             panel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -88,16 +93,30 @@ namespace FeedGem.UIHelpers
                 panel.Children.Add(iconBorder);
             }
 
-            // テキスト
+            // テキストと警告アイコンをまとめるパネル（幅が広がっても警告アイコンはテキスト直後に固定）
+            var textPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            // テキスト（エラー時はグレーアウト）
             var textBlock = new TextBlock
             {
                 Text = text,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                MaxWidth = 180
             };
 
-            textBlock.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+            // エラー状態に応じてテキスト色を変える
+            if (errorState == FeedInfo.FeedErrorState.None)
+            {
+                textBlock.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush");
+            }
+            else
+            {
+                textBlock.SetResourceReference(TextBlock.ForegroundProperty, "TextMutedBrush");
+            }
 
             // 未読がある場合は太字
             if (UnreadRegex().IsMatch(text))
@@ -105,8 +124,36 @@ namespace FeedGem.UIHelpers
                 textBlock.FontWeight = FontWeights.Bold;
             }
 
-            Grid.SetColumn(textBlock, 1);
-            panel.Children.Add(textBlock);
+            textPanel.Children.Add(textBlock);
+
+            // 警告アイコン（エラー時のみ）
+            if (errorState != FeedInfo.FeedErrorState.None)
+            {
+                string tooltip = errorState switch
+                {
+                    FeedInfo.FeedErrorState.NotFound404 => "404: フィードが見つかりません（更新をスキップ中）",
+                    FeedInfo.FeedErrorState.LongFailure => "24時間以上更新に失敗しています",
+                    _ => "一時的な更新エラーが発生しています"
+                };
+
+                var warningIcon = new TextBlock
+                {
+                    Text = "\uE7BA",
+                    FontFamily = new FontFamily("Segoe MDL2 Assets"),
+                    FontSize = 13,
+                    Margin = new Thickness(4, 0, 0, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = errorState == FeedInfo.FeedErrorState.NotFound404
+                        ? new SolidColorBrush(Color.FromRgb(0xFF, 0x5F, 0x5F))
+                        : new SolidColorBrush(Color.FromRgb(0xFF, 0xC0, 0x00)),
+                    ToolTip = tooltip
+                };
+
+                textPanel.Children.Add(warningIcon);
+            }
+
+            Grid.SetColumn(textPanel, 1);
+            panel.Children.Add(textPanel);
 
             return panel;
         }

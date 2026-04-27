@@ -293,6 +293,16 @@
         <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="4,2"/>
+
+        <Setter Property="ContextMenu">
+            <Setter.Value>
+                <ContextMenu>
+                    <MenuItem Command="ApplicationCommands.Cut"   Header="Cut"/>
+                    <MenuItem Command="ApplicationCommands.Copy"  Header="Copy"/>
+                    <MenuItem Command="ApplicationCommands.Paste" Header="Paste"/>
+                </ContextMenu>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <!-- ========================================
@@ -370,6 +380,16 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ツールチップ -->
+    <Style TargetType="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="FontSize" Value="12"/>
     </Style>
 
 </ResourceDictionary>

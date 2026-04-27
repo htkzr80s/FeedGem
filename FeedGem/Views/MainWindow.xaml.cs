@@ -52,7 +52,7 @@ namespace FeedGem.Views
             _opmlService = new OpmlService(_repository);
             _subscriptionService = new UrlSubscriptionService(_repository);
 
-            _trayManager = new TrayIconManager(TaskbarIcon, this, _unreadService);
+            _trayManager = new TrayIconManager(TaskbarIcon, this, _unreadService, _repository);
 
             _menuBuilder = new ContextMenuBuilder(
                 _repository,
@@ -784,15 +784,6 @@ namespace FeedGem.Views
             if (_currentSelectedFeedId.HasValue)
             {
                 await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value);
-            }
-        }
-
-        // TreeView内の未読数だけ更新する
-        private async Task UpdateUnreadCountsAsync()
-        {
-            foreach (TreeViewItem item in FeedTreeView.Items)
-            {
-                await UpdateUnreadCountsRecursive(item);
             }
         }
 

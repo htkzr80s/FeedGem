@@ -24,15 +24,6 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <None Remove="Resources\error.ico" />
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Page Remove="Themes\DarkTheme.xaml" />
-	  <Page Remove="Themes\LightTheme.xaml" />
-	</ItemGroup>
-
-	<ItemGroup>
 	  <Resource Include="Resources\app.ico" />
 	  <Resource Include="Resources\error.ico" />
 	  <Resource Include="Resources\unread.ico" />

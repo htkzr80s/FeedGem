@@ -1,6 +1,7 @@
 ﻿using FeedGem.Core;
 using FeedGem.Models;
 using Microsoft.Data.Sqlite;
+using static FeedGem.Data.FeedInfo;
 
 namespace FeedGem.Data
 {
@@ -96,7 +97,14 @@ namespace FeedGem.Data
             await connection.OpenAsync();
 
             // sort_orderを追加し、ソート条件に含める
-            string query = "SELECT id, folder_path, title, url, sort_order FROM feeds ORDER BY folder_path, sort_order, title";
+            // error_state / last_success_time / last_failure_time を追加取得する
+            string query = """
+                SELECT id, folder_path, title, url, sort_order,
+                       error_state, last_success_time, last_failure_time
+                FROM feeds
+                ORDER BY folder_path, sort_order, title
+                """;
+
             using var command = new SqliteCommand(query, connection);
             using var reader = await command.ExecuteReaderAsync();
 
@@ -108,7 +116,12 @@ namespace FeedGem.Data
                     FolderPath = reader.GetString(1),
                     Title = reader.GetString(2),
                     Url = reader.GetString(3),
-                    SortOrder = reader.GetInt32(4)
+                    SortOrder = reader.GetInt32(4),
+
+                    // エラー状態を読み込む（カラムがNULLの場合は None=0 にフォールバック）
+                    ErrorState = reader.IsDBNull(5) ? FeedErrorState.None : (FeedErrorState)reader.GetInt32(5),
+                    LastSuccessTime = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
+                    LastFailureTime = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
                 });
             }
             return feeds;
@@ -592,6 +605,25 @@ namespace FeedGem.Data
 
             // 更新処理を非同期で実行する
             await command.ExecuteNonQueryAsync();
+        }
+
+        // エラー状態のあるフィードが1件以上存在するか確認する
+        public async Task<bool> HasAnyFeedErrorAsync()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            var command = connection.CreateCommand();
+
+            // error_state が 0（None）以外の行が1件でもあれば true を返す
+            command.CommandText = """
+                SELECT COUNT(*) FROM feeds
+                WHERE error_state != 0
+                  AND url NOT LIKE 'folder://%'
+                """;
+
+            var result = await command.ExecuteScalarAsync();
+            return Convert.ToInt64(result) > 0;
         }
     }
 

@@ -13,10 +13,10 @@ namespace FeedGem.UIHelpers
                 ? $"{node.Name} ({node.UnreadCount})"
                 : node.Name;
 
-            // ヘッダー生成
+            // ヘッダー生成（フィードはエラー状態も渡す）
             var header = node.FeedId == null
                 ? FeedTreeHeader.Create(displayName, true)
-                : FeedTreeHeader.Create(displayName, false, node.Url);
+                : FeedTreeHeader.Create(displayName, false, node.Url, node.ErrorState);
 
             // TreeViewItem生成
             var item = new TreeViewItem
