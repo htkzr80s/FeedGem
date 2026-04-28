@@ -7,59 +7,84 @@ namespace FeedGem.Services
     {
         private readonly FeedRepository _repository = repository;
 
-        // OPMLインポート
+        // OPMLファイルを読み込み、データベースへインポートする
         public async Task<(int total, int added, int skipped)> ImportAsync(string filePath)
         {
+            // XMLファイルをロード
             var doc = XDocument.Load(filePath);
             var body = doc.Root?.Element("body");
+
+            // body要素が存在しない場合は空の結果を返す
             if (body == null) return (0, 0, 0);
 
             int total = 0;
             int added = 0;
             int skipped = 0;
 
-            // 既存URLをハッシュセットで取得し、高速に重複チェックを行う
+            // データベースから既存のフィードURLを全件取得
             var existingFeeds = await _repository.GetAllFeedsAsync();
+
+            // 高速な検索のためにハッシュセットへ格納
             var existingUrls = new HashSet<string>(
                 existingFeeds.Select(f => FeedUrlNormalizer.Normalize(f.Url))
             );
 
-            // インポート処理を開始する。初期フォルダはルートとする
-            await ProcessOutline(body.Elements("outline"), "/");
-
-            async Task ProcessOutline(IEnumerable<XElement> elements, string currentPath)
+            // 再帰的に要素を処理する内部関数
+            async Task ProcessOutlineSemiFlattened(IEnumerable<XElement> elements, string parentPath = "/")
             {
                 foreach (var outline in elements)
                 {
+                    // textまたはtitle属性から表示名を取得
                     string title = (outline.Attribute("text")?.Value
                                 ?? outline.Attribute("title")?.Value
                                 ?? "無題").Trim();
-                    string xmlUrl = outline.Attribute("xmlUrl")?.Value ?? "";
+
+                    // XML配信用のURLを取得
+                    string xmlUrl = (outline.Attribute("xmlUrl")?.Value ?? "").Trim();
 
                     if (!string.IsNullOrEmpty(xmlUrl))
                     {
+                        // URLが存在する場合（フィード項目）
                         total++;
                         string normalized = FeedUrlNormalizer.Normalize(xmlUrl);
-                        if (existingUrls.Contains(normalized)) { skipped++; continue; }
 
-                        // 保存する際は、常に先頭にスラッシュを付けない形式で統一
-                        string savePath = currentPath.Trim('/');
-                        var (feedId, isNew) = await _repository.AddFeedAsync(savePath, title, normalized);
-
-                        if (isNew) { added++; existingUrls.Add(normalized); }
-                        else { skipped++; }
+                        // 重複チェックを行い、未登録の場合のみ追加
+                        if (!existingUrls.Contains(normalized))
+                        {
+                            await _repository.AddFeedAsync(parentPath, title, normalized);
+                            existingUrls.Add(normalized); // 同一ファイル内の重複対策
+                            added++;
+                        }
+                        else
+                        {
+                            skipped++;
+                        }
                     }
                     else
                     {
-                        // 子要素がある場合はフォルダとして扱う
-                        // 階層を深くする場合に備えて、パスを連結していく
-                        string cleanTitle = title.Replace("/", "").Trim();
-                        string nextPath = currentPath == "/" ? cleanTitle : $"{currentPath}/{cleanTitle}";
+                        // URLがない場合（フォルダ項目）
+                        if (parentPath == "/")
+                        {
+                            // ルート階層なら新しいフォルダを作成
+                            string uniqueName = await _repository.GetUniqueFolderNameAsync(title);
 
-                        await ProcessOutline(outline.Elements("outline"), nextPath);
+                            // フォルダを識別するための擬似URLを生成して登録
+                            await _repository.AddFeedAsync("/", uniqueName, "folder://" + Guid.NewGuid());
+
+                            // 子要素をそのフォルダ配下として処理
+                            await ProcessOutlineSemiFlattened(outline.Elements("outline"), "/" + uniqueName);
+                        }
+                        else
+                        {
+                            // 既にサブフォルダ内なら、階層を深くせず現在のフォルダに子要素を展開
+                            await ProcessOutlineSemiFlattened(outline.Elements("outline"), parentPath);
+                        }
                     }
                 }
             }
+
+            // 初回呼び出し
+            await ProcessOutlineSemiFlattened(body.Elements("outline"), "/");
 
             return (total, added, skipped);
         }

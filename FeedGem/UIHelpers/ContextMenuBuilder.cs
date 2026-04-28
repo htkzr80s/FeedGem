@@ -2,6 +2,7 @@
 using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.Views;
+using Microsoft.Data.Sqlite;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -209,13 +210,26 @@ namespace FeedGem.UIHelpers
             string name = dialog.InputText;
             if (string.IsNullOrWhiteSpace(name)) return;
 
+            if (await _repository.FolderExistsAsync(name))
+            {
+                MessageBox.Show("同名のフォルダが既に存在します。", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
             string path = "/";
             if (target?.Tag is TreeTag tag && tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
             {
                 path = tag.FolderPath;
             }
 
-            await _repository.AddFeedAsync(path, name, "folder://" + Guid.NewGuid());
+            try
+            {
+                await _repository.AddFeedAsync(path, name, "folder://" + Guid.NewGuid());
+            }
+            catch (SqliteException)
+            {
+                MessageBox.Show("同名のフォルダが既に存在します。", "エラー");
+            }
             await _reloadTree();
         }
 
@@ -238,7 +252,20 @@ namespace FeedGem.UIHelpers
                 string name = dialog.InputText;
                 if (string.IsNullOrWhiteSpace(name) || name == current) return;
 
-                await _feedService.RenameFolderAsync(folderPath, name);
+                if (await _repository.FolderExistsAsync(name))
+                {
+                    MessageBox.Show("同名のフォルダが既に存在します。", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                try
+                {
+                    await _feedService.RenameFolderAsync(folderPath, name);
+                }
+                catch (SqliteException)
+                {
+                    MessageBox.Show("同名のフォルダが既に存在します。", "エラー");
+                }
                 await _reloadTree();
             }
             else if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)

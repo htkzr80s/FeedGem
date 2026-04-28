@@ -401,3 +401,4 @@ FodyWeavers.xsd
 *.sln.iml
 
 gitaid.py
+gitaid_ollama.py

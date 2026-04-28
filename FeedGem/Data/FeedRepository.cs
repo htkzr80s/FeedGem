@@ -68,7 +68,17 @@ namespace FeedGem.Data
                     cmd.ExecuteNonQuery();
                 }
 
-                // --- 4. カラム追加のアップデート処理 ---
+                // --- 4 フォルダ名のユニーク制約（フォルダのみ対象） ---
+                using (var cmd = new SqliteCommand("""
+                    CREATE UNIQUE INDEX IF NOT EXISTS idx_folder_unique
+                    ON feeds(title)
+                    WHERE url LIKE 'folder://%';
+                    """, connection, transaction))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                // --- 5. カラム追加のアップデート処理 ---
                 AddColumnIfMissing(connection, transaction, "feeds", "sort_order", "INTEGER DEFAULT 0");
                 AddColumnIfMissing(connection, transaction, "feeds", "folder_path", "TEXT NOT NULL DEFAULT '/'");
 
@@ -650,6 +660,58 @@ namespace FeedGem.Data
 
             var result = await command.ExecuteScalarAsync();
             return Convert.ToInt64(result) > 0;
+        }
+
+        // フォルダ名をユニークにする
+        public async Task<string> GetUniqueFolderNameAsync(string baseName)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string name = baseName;
+            int counter = 1;
+
+            while (true)
+            {
+                string query = """
+                    SELECT COUNT(*)
+                    FROM feeds
+                    WHERE folder_path = '/'
+                      AND title = @name
+                      AND url LIKE 'folder://%';
+                    """;
+
+                using var cmd = new SqliteCommand(query, connection);
+                cmd.Parameters.AddWithValue("@name", name);
+
+                var count = (long)(await cmd.ExecuteScalarAsync() ?? 0);
+                if (count == 0)
+                    return name;
+
+                name = $"{baseName} ({counter})";
+                counter++;
+            }
+        }
+
+        // 同名フォルダ存在チェック
+        public async Task<bool> FolderExistsAsync(string name)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            string query = """
+                SELECT COUNT(*)
+                FROM feeds
+                WHERE folder_path = '/'
+                  AND title = @name
+                  AND url LIKE 'folder://%';
+                """;
+
+            using var cmd = new SqliteCommand(query, connection);
+            cmd.Parameters.AddWithValue("@name", name);
+
+            var count = (long)(await cmd.ExecuteScalarAsync() ?? 0);
+            return count > 0;
         }
     }
 
