@@ -16,12 +16,19 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
-            // 全ての初期化を一つの「まとまった処理」として扱う
+            // トランザクションを開始して、変数 'transaction' を作成する
             using var transaction = connection.BeginTransaction();
 
             try
             {
-                string createTableQuery = """
+                // 外部キー制約を有効化する
+                using (var cmd = new SqliteCommand("PRAGMA foreign_keys = ON;", connection, transaction))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+                
+                // --- 1. feedsテーブルの作成 ---
+                using (var cmd = new SqliteCommand("""
                     CREATE TABLE IF NOT EXISTS feeds (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         folder_path TEXT NOT NULL DEFAULT '/',
@@ -31,6 +38,13 @@ namespace FeedGem.Data
                         last_success_time TEXT,
                         last_failure_time TEXT
                     );
+                    """, connection, transaction))
+                {
+                    cmd.ExecuteNonQuery();
+                }
+
+                // --- 2. entriesテーブルの作成（外部キー制約があるため順序が大事） ---
+                using (var cmd = new SqliteCommand("""
                     CREATE TABLE IF NOT EXISTS entries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         feed_id INTEGER,
@@ -41,51 +55,63 @@ namespace FeedGem.Data
                         is_read INTEGER DEFAULT 0,
                         FOREIGN KEY(feed_id) REFERENCES feeds(id)
                     );
-                    """;
-
-                using (var command = new SqliteCommand(createTableQuery, connection, transaction))
+                    """, connection, transaction))
                 {
-                    command.ExecuteNonQuery();
+                    cmd.ExecuteNonQuery();
                 }
 
-                // --- インデックスの作成 ---
-                const string createIndexSql = """
-                    CREATE INDEX IF NOT EXISTS idx_entries_feedid 
-                    ON entries(feed_id);
-                    """;
-
-                using (var indexCommand = new SqliteCommand(createIndexSql, connection, transaction))
+                // --- 3. インデックスの作成 ---
+                using (var cmd = new SqliteCommand("""
+                    CREATE INDEX IF NOT EXISTS idx_entries_feedid ON entries(feed_id);
+                    """, connection, transaction))
                 {
-                    indexCommand.ExecuteNonQuery();
+                    cmd.ExecuteNonQuery();
                 }
 
-                // --- カラム追加のアップデート処理 ---
+                // --- 4. カラム追加のアップデート処理 ---
                 AddColumnIfMissing(connection, transaction, "feeds", "sort_order", "INTEGER DEFAULT 0");
                 AddColumnIfMissing(connection, transaction, "feeds", "folder_path", "TEXT NOT NULL DEFAULT '/'");
 
-                transaction.Commit();
+                transaction.Commit(); // すべて成功したら確定
             }
             catch (Exception ex)
             {
-                // どこかで失敗したら、この時の作業を全てキャンセルして元に戻す
+                // ロールバック（作業の取り消し）
                 transaction.Rollback();
-                Console.WriteLine($"[Critical Error] データベース初期化に失敗: {ex.Message}");
-                throw; // 致命的なエラーなので呼び出し元に知らせる
+
+                Console.WriteLine("--- データベース初期化エラー詳細 ---");
+                Console.WriteLine($"内容: {ex.Message}");
+                Console.WriteLine($"場所: {ex.StackTrace}");
+                Console.WriteLine("----------------------------------");
+
+                throw;
             }
         }
 
-        // カラム追加用の補助メソッド
+        // カラム追加用の補助メソッド（例外を出さない安全版）
         private static void AddColumnIfMissing(SqliteConnection conn, SqliteTransaction trans, string tableName, string columnName, string definition)
         {
-            try
+            // テーブルの情報を取得して、指定した列名が既に存在するか確認する
+            bool columnExists = false;
+            using (var checkCmd = new SqliteCommand($"PRAGMA table_info({tableName});", conn, trans))
             {
-                // SQLiteは同じ列を足そうとするとエラーを吐くので、それを逆手に取る手法
+                using var reader = checkCmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    // 1番目の列（name）にカラム名が入っているんだ
+                    if (reader.GetString(1).Equals(columnName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        columnExists = true;
+                        break;
+                    }
+                }
+            }
+
+            // 列が存在しない場合のみ、追加コマンドを実行する
+            if (!columnExists)
+            {
                 using var command = new SqliteCommand($"ALTER TABLE {tableName} ADD COLUMN {columnName} {definition};", conn, trans);
                 command.ExecuteNonQuery();
-            }
-            catch (SqliteException ex) when (ex.SqliteErrorCode == 1)
-            {
-                // 「既に列が存在する」場合のエラー(1)は正常な動作なので無視する
             }
         }
 

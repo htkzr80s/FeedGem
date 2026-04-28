@@ -350,11 +350,18 @@
 
                         <StackPanel Orientation="Horizontal">
                             <!-- アイコン -->
-                            <ContentPresenter ContentSource="Icon"
-                                          Width="20"
-                                          Margin="0,0,8,0"
-                                          VerticalAlignment="Center"/>
-
+                            <Border x:Name="IconBorder"
+                                Width="18"
+                                Height="18"
+                                CornerRadius="3"
+                                Margin="0,0,8,0"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource IconBackgroundBrush}"> 
+                                                    <ContentPresenter ContentSource="Icon"
+                                              VerticalAlignment="Center"
+                                              HorizontalAlignment="Center"/>
+                            </Border>
+                            
                             <!-- テキスト -->
                             <TextBlock Text="{TemplateBinding Header}"
                                        Foreground="{TemplateBinding Foreground}"
