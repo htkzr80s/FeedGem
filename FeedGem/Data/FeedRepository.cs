@@ -1,6 +1,7 @@
 ﻿using FeedGem.Core;
 using FeedGem.Models;
 using Microsoft.Data.Sqlite;
+using System.Transactions;
 using static FeedGem.Data.FeedInfo;
 
 namespace FeedGem.Data
@@ -89,10 +90,10 @@ namespace FeedGem.Data
                 // ロールバック（作業の取り消し）
                 transaction.Rollback();
 
-                Console.WriteLine("--- データベース初期化エラー詳細 ---");
-                Console.WriteLine($"内容: {ex.Message}");
-                Console.WriteLine($"場所: {ex.StackTrace}");
-                Console.WriteLine("----------------------------------");
+                Console.WriteLine("--- Database Initialization Error Details ---");
+                Console.WriteLine($"Message: {ex.Message}");
+                Console.WriteLine($"StackTrace: {ex.StackTrace}");
+                Console.WriteLine("---------------------------------------------");
 
                 throw;
             }
@@ -108,7 +109,7 @@ namespace FeedGem.Data
                 using var reader = checkCmd.ExecuteReader();
                 while (reader.Read())
                 {
-                    // 1番目の列（name）にカラム名が入っているんだ
+                    // 1番目の列（name）にカラム名が入っている
                     if (reader.GetString(1).Equals(columnName, StringComparison.OrdinalIgnoreCase))
                     {
                         columnExists = true;
@@ -287,34 +288,62 @@ namespace FeedGem.Data
             await command.ExecuteNonQueryAsync();
         }
 
-        // 指定フォルダ配下のすべての記事を既読にする
-        public async Task MarkFolderAsReadAsync(string folderPath)
+        // 指定フィードの全記事を既読にする（一括更新）
+        public async Task MarkAllAsReadAsync(long feedId)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // UIから渡されるパスを正規化
-            string targetPath = folderPath.Trim('\\', '/');
-
-            string updateQuery = """
+            using var command = connection.CreateCommand();
+            command.CommandText = """
                 UPDATE entries
                 SET is_read = 1
-                WHERE feed_id IN (
-                    SELECT id FROM feeds
-                    WHERE 
-                        (
-                            folder_path = @path OR 
-                            folder_path LIKE @child ESCAPE '#'
-                        )
-                        AND url NOT LIKE 'folder://%'
-                )
+                WHERE feed_id = @feedId;
                 """;
 
-            using var command = new SqliteCommand(updateQuery, connection);
-            command.Parameters.AddWithValue("@path", targetPath);
-            command.Parameters.AddWithValue("@child", targetPath + "\\%"); // 子階層用
+            command.Parameters.AddWithValue("@feedId", feedId);
 
             await command.ExecuteNonQueryAsync();
+        }
+
+        // 指定したフォルダ配下のすべての記事を既読にする
+        public async Task MarkFolderEntriesAsReadAsync(long folderId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // 1. まずフォルダ自身の情報を取得して「配下を特定するためのパス」を作る
+            string getPathQuery = "SELECT folder_path, title FROM feeds WHERE id = @id;";
+            string fullPath = "";
+
+            using (var cmd = new SqliteCommand(getPathQuery, connection))
+            {
+                cmd.Parameters.AddWithValue("@id", folderId);
+                using var reader = await cmd.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    var parent = reader.GetString(0);
+                    var title = reader.GetString(1);
+                    fullPath = parent.EndsWith('/') ? parent + title : parent + "/" + title;
+                }
+            }
+
+            if (string.IsNullOrEmpty(fullPath)) return;
+
+            // 2. 該当する folder_path を持つフィードに属する記事を一括更新
+            string updateQuery = """
+                UPDATE entries 
+                SET is_read = 1 
+                WHERE feed_id IN (
+                    SELECT id FROM feeds WHERE folder_path = @path
+                );
+                """;
+
+            using (var cmd = new SqliteCommand(updateQuery, connection))
+            {
+                cmd.Parameters.AddWithValue("@path", fullPath);
+                await cmd.ExecuteNonQueryAsync();
+            }
         }
 
         // 指定したフィードの未読記事数を取得する
@@ -363,56 +392,46 @@ namespace FeedGem.Data
             return result;
         }
 
-        // フィード情報を更新する（タイトルやフォルダ、URLの変更用）
-        public async Task UpdateFeedAsync(long id, string folderPath, string title, string url)
+        public async Task UpdateFeedTitleAsync(long feedId, string newTitle)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
+            // titleカラムのみを対象にする
+            string query = "UPDATE feeds SET title = @title WHERE id = @id;";
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@title", newTitle);
+            command.Parameters.AddWithValue("@id", feedId);
+            await command.ExecuteNonQueryAsync();
+        }
 
-            string updateQuery = "UPDATE feeds SET folder_path = @folder, title = @title, url = @url WHERE id = @id";
-            using var command = new SqliteCommand(updateQuery, connection);
-            command.Parameters.AddWithValue("@folder", folderPath);
-            command.Parameters.AddWithValue("@title", title);
-            command.Parameters.AddWithValue("@url", url);
-            command.Parameters.AddWithValue("@id", id);
-
+        // 移動（フォルダパス）だけを変える
+        public async Task UpdateFeedPathAsync(long feedId, string newPath)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+            // folder_pathカラムのみを対象にする
+            string query = "UPDATE feeds SET folder_path = @path WHERE id = @id;";
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@path", newPath);
+            command.Parameters.AddWithValue("@id", feedId);
             await command.ExecuteNonQueryAsync();
         }
 
         // フィードの並び順（sort_order）のみを更新する
-        public async Task UpdateFeedOrderAsync(long id, int sortOrder)
+        public async Task UpdateFeedSortOrderAsync(long feedId, int newOrder)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
-
-            string updateQuery = "UPDATE feeds SET sort_order = @sortOrder WHERE id = @id";
-            using var command = new SqliteCommand(updateQuery, connection);
-            command.Parameters.AddWithValue("@sortOrder", sortOrder);
-            command.Parameters.AddWithValue("@id", id);
-
-            await command.ExecuteNonQueryAsync();
-        }
-
-        // 指定フィードの全記事を既読にする（一括更新）
-        public async Task MarkAllAsReadAsync(long feedId)
-        {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                UPDATE entries
-                SET is_read = 1
-                WHERE feed_id = @feedId;
-                """;
-
-            command.Parameters.AddWithValue("@feedId", feedId);
-
+            // sort_orderカラムのみを対象にする
+            string query = "UPDATE feeds SET sort_order = @order WHERE id = @id;";
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@order", newOrder);
+            command.Parameters.AddWithValue("@id", feedId);
             await command.ExecuteNonQueryAsync();
         }
 
         // フィードを削除する（関連する記事も一緒に消す）
-        public async Task DeleteFeedAsync(long id)
+        public async Task DeleteFeedAsync(long feedId)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
@@ -426,11 +445,11 @@ namespace FeedGem.Data
                 string deleteFeed = "DELETE FROM feeds WHERE id = @id";
 
                 using var cmd1 = new SqliteCommand(deleteEntries, connection, transaction);
-                cmd1.Parameters.AddWithValue("@id", id);
+                cmd1.Parameters.AddWithValue("@id", feedId);
                 await cmd1.ExecuteNonQueryAsync();
 
                 using var cmd2 = new SqliteCommand(deleteFeed, connection, transaction);
-                cmd2.Parameters.AddWithValue("@id", id);
+                cmd2.Parameters.AddWithValue("@id", feedId);
                 await cmd2.ExecuteNonQueryAsync();
 
                 // 確定処理も非同期で行う
@@ -460,58 +479,69 @@ namespace FeedGem.Data
         }
 
         // フォルダとその配下の全データを削除する
-        public async Task DeleteFolderAsync(string folderPath)
+        public async Task DeleteFolderAsync(long folderId)
         {
-            if (string.IsNullOrEmpty(folderPath))
-                throw new ArgumentException("フォルダパスが空です", nameof(folderPath));
-
-            if (!folderPath.StartsWith('/'))
-                folderPath = "/" + folderPath.TrimEnd('/');
-
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
             // トランザクションを非同期で開始
             using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction
-                ?? throw new InvalidOperationException("トランザクションの開始に失敗しました");
+                ?? throw new InvalidOperationException("Failed to begin transaction.");
 
             try
             {
-                string childPattern = folderPath + "/%";
-                string folderName = folderPath.TrimStart('/').Split('/').LastOrDefault() ?? "";
+                // 1. 削除対象となるフォルダの情報を取得する
+                string getPathQuery = "SELECT folder_path, title FROM feeds WHERE id = @id;";
+                string targetPath = "";
+                using (var cmdPath = new SqliteCommand(getPathQuery, connection, transaction))
+                {
+                    cmdPath.Parameters.AddWithValue("@id", folderId);
+                    using var reader = await cmdPath.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        // 親のパスと自身の名前を組み合わせてフルパスを構築する
+                        string parentPath = reader.GetString(0);
+                        string folderName = reader.GetString(1);
+                        targetPath = parentPath == "/" ? $"/{folderName}" : $"{parentPath}/{folderName}";
+                    }
+                }
 
+                // 対象が見つからない場合は何もしない
+                if (string.IsNullOrEmpty(targetPath)) return;
+
+                // 子階層を特定するためのパターンを作成する（SQLのLIKE用）
+                string childPattern = targetPath + "/%";
+
+                // 2. 配下のフィードに紐付く記事(entries)を先に削除する
                 string deleteEntries = """
                     DELETE FROM entries
                     WHERE feed_id IN (
                         SELECT id FROM feeds
-                        WHERE folder_path = @folderPath
-                           OR folder_path LIKE @childPattern ESCAPE '\'
-                    )
+                        WHERE folder_path = @targetPath
+                           OR folder_path LIKE @childPattern
+                    );
                     """;
 
                 using (var cmd1 = new SqliteCommand(deleteEntries, connection, transaction))
                 {
-                    cmd1.Parameters.AddWithValue("@folderPath", folderPath);
+                    cmd1.Parameters.AddWithValue("@targetPath", targetPath);
                     cmd1.Parameters.AddWithValue("@childPattern", childPattern);
                     await cmd1.ExecuteNonQueryAsync();
                 }
 
-                // ダミーレコードを一意に特定するためのURLを生成する
-                string folderUrl = "folder://" + folderPath;
-
-                // フォルダ配下のフィードと、ダミーレコードをURLで特定して削除する
+                // 3. フォルダ自身、配下のフィード、および配下のフォルダを削除する
                 string deleteFeeds = """
                     DELETE FROM feeds
-                    WHERE folder_path = @folderPath
-                       OR folder_path LIKE @childPattern ESCAPE '\'
-                       OR url = @folderUrl
+                    WHERE id = @id
+                       OR folder_path = @targetPath
+                       OR folder_path LIKE @childPattern;
                     """;
 
                 using (var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction))
                 {
-                    cmd2.Parameters.AddWithValue("@folderPath", folderPath);
+                    cmd2.Parameters.AddWithValue("@id", folderId);
+                    cmd2.Parameters.AddWithValue("@targetPath", targetPath);
                     cmd2.Parameters.AddWithValue("@childPattern", childPattern);
-                    cmd2.Parameters.AddWithValue("@folderUrl", folderUrl);
                     await cmd2.ExecuteNonQueryAsync();
                 }
 
@@ -519,67 +549,74 @@ namespace FeedGem.Data
             }
             catch (Exception ex)
             {
+                // 失敗した場合はロールバックして例外を再送出する
                 await transaction.RollbackAsync();
-                throw new InvalidOperationException($"フォルダ削除に失敗しました: {folderPath}", ex);
+                throw new InvalidOperationException($"Failed to delete folder (ID: {folderId}).", ex);
             }
         }
 
         // フォルダ名を変更する（配下すべて含む）
-        public async Task RenameFolderAsync(string folderPath, string newName)
+        public async Task RenameFolderAsync(long folderId, string newName)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // トランザクションを非同期で開始
-            using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction;
+            // 抽象型として開始
+            using var transaction = await connection.BeginTransactionAsync();
+
+            // SqliteCommandに渡すために、SqliteTransactionとして扱えるか確認しながらキャストする
+            if (transaction is not SqliteTransaction sqliteTrans)
+            {
+                throw new InvalidOperationException("Failed to start SQLite transaction.");
+            }
 
             try
             {
-                string newRoot = "/" + newName;
-                string childPattern = folderPath + "/%";
+                // --- 1. データベースから現在の情報を取得 ---
+                string oldName = "";
+                string parentPath = "";
 
-                string updateFeeds = """
-                    UPDATE feeds
-                    SET folder_path = 
-                        CASE
-                            WHEN folder_path = @old THEN @new
-                            WHEN folder_path LIKE @child THEN 
-                                @new || SUBSTR(folder_path, LENGTH(@old) + 1)
-                        END
-                    WHERE folder_path = @old OR folder_path LIKE @child
-                    """;
-
-                using (var cmd = new SqliteCommand(updateFeeds, connection, transaction))
+                string selectQuery = "SELECT title, folder_path FROM feeds WHERE id = @id;";
+                using (var cmd = new SqliteCommand(selectQuery, connection, sqliteTrans))
                 {
-                    cmd.Parameters.AddWithValue("@old", folderPath);
-                    cmd.Parameters.AddWithValue("@new", newRoot);
-                    cmd.Parameters.AddWithValue("@child", childPattern);
+                    cmd.Parameters.AddWithValue("@id", folderId);
+                    using var reader = await cmd.ExecuteReaderAsync();
+                    if (await reader.ReadAsync())
+                    {
+                        oldName = reader.GetString(0);
+                        parentPath = reader.GetString(1);
+                    }
+                }
+
+                if (string.IsNullOrEmpty(oldName)) return;
+
+                // 2. 現在のフルパスと、新しいフルパスを組み立てる
+                string oldFullPath = parentPath.EndsWith('/') ? parentPath + oldName : parentPath + "/" + oldName;
+                string newFullPath = parentPath.EndsWith('/') ? parentPath + newName : parentPath + "/" + newName;
+
+                // 3. フォルダの中身（配下のフィードやサブフォルダ）のパスを一括更新
+                string updateChildren = "UPDATE feeds SET folder_path = @newPath WHERE folder_path = @oldPath;";
+                using (var cmd = new SqliteCommand(updateChildren, connection, sqliteTrans))
+                {
+                    cmd.Parameters.AddWithValue("@oldPath", oldFullPath);
+                    cmd.Parameters.AddWithValue("@newPath", newFullPath);
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                // folderPath から元のフォルダ名と、ダミーレコードのURLを生成する
-                string folderName = folderPath.TrimStart('/').Split('/').Last();
-                string oldFolderUrl = "folder://" + folderPath;
-
-                // ダミーレコードをURLで一意に特定してリネームする
-                string updateDummy = """
-                    UPDATE feeds
-                    SET title = @newName
-                    WHERE url = @oldFolderUrl
-                    """;
-
-                using (var cmd = new SqliteCommand(updateDummy, connection, transaction))
+                // --- 4. フォルダ自身の名前を更新 ---
+                string updateFolder = "UPDATE feeds SET title = @newName WHERE id = @id;";
+                using (var cmd = new SqliteCommand(updateFolder, connection, sqliteTrans))
                 {
                     cmd.Parameters.AddWithValue("@newName", newName);
-                    cmd.Parameters.AddWithValue("@oldFolderUrl", oldFolderUrl);
+                    cmd.Parameters.AddWithValue("@id", folderId);
                     await cmd.ExecuteNonQueryAsync();
                 }
 
-                await transaction!.CommitAsync();
+                await transaction.CommitAsync();
             }
             catch
             {
-                await transaction!.RollbackAsync();
+                await sqliteTrans.RollbackAsync();
                 throw;
             }
         }
@@ -720,8 +757,8 @@ namespace FeedGem.Data
     {
         public long Id { get; set; }
         public string FolderPath { get; set; } = "/";
-        public string Title { get; set; } = "";
-        public string Url { get; set; } = "";
+        public string Title { get; set; } = string.Empty;
+        public string Url { get; set; } = string.Empty;
         public int SortOrder { get; set; } = 0;
 
         // エラー状態

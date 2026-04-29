@@ -87,25 +87,21 @@ namespace FeedGem.Services
         }
 
         // 指定したフォルダ内のすべてのフィード記事を既読にする
-        public async Task MarkFolderAsReadAsync(string folderPath)
+        public async Task MarkFolderAsReadAsync(long folderId)
         {
-            await _repository.MarkFolderAsReadAsync(folderPath);
+            await _repository.MarkFolderEntriesAsReadAsync(folderId);
         }
 
         // フィード名変更
         public async Task RenameFeedAsync(long feedId, string newName)
         {
-            var feeds = await _repository.GetAllFeedsAsync();
-            var target = feeds.FirstOrDefault(f => f.Id == feedId);
-            if (target == null) return;
-
-            await _repository.UpdateFeedAsync(target.Id, target.FolderPath, newName, target.Url);
+            await _repository.UpdateFeedTitleAsync(feedId, newName);
         }
 
         // フォルダ名変更
-        public async Task RenameFolderAsync(string folderPath, string newName)
+        public async Task RenameFolderAsync(long folderId, string newName)
         {
-            await _repository.RenameFolderAsync(folderPath, newName);
+            await _repository.RenameFolderAsync(folderId, newName);
         }
 
         // フィード削除
@@ -115,9 +111,9 @@ namespace FeedGem.Services
         }
 
         // フォルダ削除
-        public async Task DeleteFolderAsync(string folderPath)
+        public async Task DeleteFolderAsync(long folderId)
         {
-            await _repository.DeleteFolderAsync(folderPath);
+            await _repository.DeleteFolderAsync(folderId);
         }
     }
 

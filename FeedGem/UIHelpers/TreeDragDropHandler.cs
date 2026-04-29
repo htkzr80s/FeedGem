@@ -54,7 +54,7 @@ namespace FeedGem.UIHelpers
 
             // フォルダの移動かどうかを判定
             bool isFolderMove = sourceTag.Type == TreeNodeType.Folder;
-            if (!isFolderMove && sourceTag.FeedId == null) return;
+            if (!isFolderMove && sourceTag.Id == null) return;
 
             var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
             if (targetItem == _dragSourceItem) return;
@@ -142,7 +142,7 @@ namespace FeedGem.UIHelpers
             else
             {
                 // 通常のフィードの移動処理
-                long sourceId = sourceTag.FeedId!.Value;
+                long sourceId = sourceTag.Id!.Value;
                 var source = feeds.FirstOrDefault(f => f.Id == sourceId);
                 if (source == null) return;
 

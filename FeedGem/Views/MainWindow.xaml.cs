@@ -742,9 +742,9 @@ namespace FeedGem.Views
         // TreeViewItemに選択イベントを再帰的に付与する
         private void AttachSelectionHandler(TreeViewItem item)
         {
-            if (item.Tag is TreeTag tag && tag.FeedId != null)
+            if (item.Tag is TreeTag tag && tag.Id != null)
             {
-                long feedId = tag.FeedId.Value;
+                long feedId = tag.Id;
 
                 item.Selected += async (s, e) =>
                 {
@@ -790,9 +790,9 @@ namespace FeedGem.Views
         // 未読数更新（差分のみ反映）
         private async Task UpdateUnreadCountsRecursive(TreeViewItem item)
         {
-            if (item.Tag is TreeTag tag && tag.Type == TreeNodeType.Feed && tag.FeedId != null)
+            if (item.Tag is TreeTag tag && tag.Type == TreeNodeType.Feed && tag.Id != null)
             {
-                int unread = await _repository.GetUnreadCountByFeedIdAsync(tag.FeedId.Value);
+                int unread = await _repository.GetUnreadCountByFeedIdAsync(tag.Id);
 
                 // 差分があるときだけ更新
                 if (tag.UnreadCount != unread)

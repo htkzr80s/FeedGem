@@ -5,10 +5,17 @@ namespace FeedGem.Models
     // ツリー表示用の純データモデル（UI非依存）
     public class TreeNodeModel
     {
-        public string Name { get; set; } = "";
-        public string Path { get; set; } = "";
-        public long? FeedId { get; set; } // フィードなら値あり、フォルダならnull
-        public string? Url { get; set; }
+
+        public long Id { get; set; }
+
+        public string Name { get; set; } = string.Empty;
+
+        public string Path { get; set; } = string.Empty;
+
+        public bool IsFolder { get; set; }
+
+        public string Url { get; set; } = string.Empty;
+
         public int UnreadCount { get; set; } = 0;
 
         // エラー状態（FeedInfoの値をそのまま持つ）

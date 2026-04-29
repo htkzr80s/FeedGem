@@ -55,18 +55,23 @@ namespace FeedGem.UIHelpers
             exportOpmlItem.Click += async (s, e) => await _exportOpml();
             menu.Items.Add(exportOpmlItem);
 
-            // ノード固有メニュー
+            // ノード（フィードまたはフォルダ）固有のメニュー項目を構築する
             if (treeViewItem?.Tag is TreeTag tag)
             {
-                menu.Items.Add(new Separator());
+                // IDが有効な場合のみ、固有メニューを追加する
+                if (tag.Id > 0)
+                {
+                    menu.Items.Add(new Separator());
 
-                if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)
-                {
-                    AddFeedSpecificItems(menu, tag.FeedId.Value, treeViewItem);
-                }
-                else if (tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
-                {
-                    AddFolderSpecificItems(menu, tag.FolderPath, treeViewItem);
+                    // ノードの種類に応じて専用のメニュー項目を追加する
+                    if (tag.Type == TreeNodeType.Feed)
+                    {
+                        AddFeedSpecificItems(menu, tag.Id, treeViewItem);
+                    }
+                    else if (tag.Type == TreeNodeType.Folder)
+                    {
+                        AddFolderSpecificItems(menu, tag.Id, treeViewItem);
+                    }
                 }
             }
             return menu;
@@ -75,6 +80,9 @@ namespace FeedGem.UIHelpers
         // フィード固有メニュー
         private void AddFeedSpecificItems(ContextMenu menu, long feedId, TreeViewItem treeViewItem)
         {
+            if (treeViewItem.Tag is not TreeTag tag) return;
+
+            // すべて既読にする
             var markAllReadItem = new MenuItem { Header = "すべて既読にする" };
             markAllReadItem.Click += async (s, e) =>
             {
@@ -84,31 +92,25 @@ namespace FeedGem.UIHelpers
             };
             menu.Items.Add(markAllReadItem);
 
+            // 名前を変更する
             var renameItem = new MenuItem { Header = "名前を変更..." };
             renameItem.Click += async (s, e) => await Rename(treeViewItem);
             menu.Items.Add(renameItem);
 
-            // TreeViewItemのTagからカスタムデータ（TreeTag）を取得
-            var tag = treeViewItem.Tag as TreeTag;
-
-            // URLをコピーするメニュー項目の作成
+            // URLをコピーする
             var copyUrlItem = new MenuItem { Header = "URLをコピー" };
-
-            // クリックイベントの定義
             copyUrlItem.Click += (s, e) =>
             {
-                // TagにURLが存在するか確認
-                if (!string.IsNullOrEmpty(tag?.Url))
-                {
-                    // Windowsのクリップボードにテキストをセット
-                    Clipboard.SetText(tag.Url);
-                    _log.Text = $"URLをコピーしました: {tag.Url}";
-                }
+                // クリップボードにURLを格納
+                Clipboard.SetText(tag.Url);
+                // 操作結果をユーザーに通知
+                _log.Text = $"URLをコピーしました: {tag.Url}";
             };
             menu.Items.Add(copyUrlItem);
 
             menu.Items.Add(new Separator());
 
+            // フィードを削除
             var deleteFeedItem = new MenuItem
             {
                 Header = "このフィードを削除",
@@ -118,14 +120,16 @@ namespace FeedGem.UIHelpers
             menu.Items.Add(deleteFeedItem);
         }
 
-        // フォルダ固有メニュー（名前変更を追加済み）
-        private void AddFolderSpecificItems(ContextMenu menu, string folderPath, TreeViewItem treeViewItem)
+        // フォルダ固有メニュー
+        private void AddFolderSpecificItems(ContextMenu menu, long folderId, TreeViewItem treeViewItem)
         {
+            if (treeViewItem.Tag is not TreeTag tag) return;
+
             // すべて既読にする
             var markFolderReadItem = new MenuItem { Header = "すべて既読にする" };
             markFolderReadItem.Click += async (s, e) =>
             {
-                await _feedService.MarkFolderAsReadAsync(folderPath);
+                await _feedService.MarkFolderAsReadAsync(folderId);
                 await _reloadTree();
                 await _refreshCurrentListView();
             };
@@ -144,30 +148,45 @@ namespace FeedGem.UIHelpers
             };
             deleteFolderItem.Click += async (s, e) =>
             {
+                // 現在のフォルダパスをタグから取得する
+                string folderPath = tag.FolderPath == "/" ? $"/{tag.Name}" : $"{tag.FolderPath}/{tag.Name}";
+
+                // データベースから全フィード情報を取得する
                 var allFeeds = await _repository.GetAllFeedsAsync();
+
+                // 削除対象のフォルダ内（サブフォルダ含む）にフィードが存在するか確認する
                 bool hasContents = allFeeds.Any(f =>
                     !f.Url.StartsWith("folder://") &&
                     (f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/")));
 
+                // 中身がある場合はユーザーに最終確認を行う
                 if (hasContents)
                 {
                     var result = MessageBox.Show(
                         "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
-                        "確認",
+                        "フォルダの削除",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Warning);
 
                     if (result != MessageBoxResult.Yes)
+                    {
                         return;
+                    }
                 }
 
+                // メインウィンドウの表示パネルをクリアして、不正な参照を防ぐ
                 if (Application.Current.MainWindow is MainWindow main)
                 {
                     main.ClearAllPanels();
                 }
 
-                await _feedService.DeleteFolderAsync(folderPath);
+                // サービスを介してフォルダと配下のデータを削除する
+                await _feedService.DeleteFolderAsync(folderId);
+
+                // 画面のツリー構造を最新の状態に更新する
                 await _reloadTree();
+
+                // 現在表示中のリストビューを更新する
                 await _refreshCurrentListView();
             };
             menu.Items.Add(deleteFolderItem);
@@ -238,9 +257,9 @@ namespace FeedGem.UIHelpers
         {
             if (item.Tag is not TreeTag tag) return;
 
-            if (tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
+            if (tag.Type == TreeNodeType.Folder)
             {
-                string folderPath = tag.FolderPath;
+                string folderPath = tag.Id;
                 string current = folderPath.TrimStart('/');
 
                 var dialog = new InputDialog("新しい名前", current);
@@ -260,7 +279,7 @@ namespace FeedGem.UIHelpers
 
                 try
                 {
-                    await _feedService.RenameFolderAsync(folderPath, name);
+                    await _feedService.RenameFolderAsync(folderId, name);
                 }
                 catch (SqliteException)
                 {
@@ -268,24 +287,24 @@ namespace FeedGem.UIHelpers
                 }
                 await _reloadTree();
             }
-            else if (tag.Type == TreeNodeType.Feed && tag.FeedId != null)
+            else if (tag.Type == TreeNodeType.Feed)
             {
-                long feedId = tag.FeedId.Value;
+                long feedId = tag.Id;
+                string currentTitle = tag.Name;
+                var dialog = new InputDialog("新しい名前", currentTitle);
 
-                var feeds = await _repository.GetAllFeedsAsync();
-                var target = feeds.FirstOrDefault(f => f.Id == feedId);
-                if (target == null) return;
-
-                var dialog = new InputDialog("新しい名前", target.Title);
+                // メインウィンドウを親に設定して、ダイアログが背面に隠れないようにする
                 if (Application.Current?.MainWindow != null)
                     dialog.Owner = Application.Current.MainWindow;
 
                 if (dialog.ShowDialog() != true) return;
 
-                string name = dialog.InputText;
-                if (string.IsNullOrWhiteSpace(name) || name == target.Title) return;
+                // 入力された文字列を取得し、空白チェックと変更有無を確認する
+                string newName = dialog.InputText;
+                if (string.IsNullOrWhiteSpace(newName) || newName == currentTitle) return;
 
-                await _feedService.RenameFeedAsync(feedId, name);
+                // データベースの名前を更新し、UI（ツリー）をリロードして反映させる
+                await _feedService.RenameFeedAsync(feedId, newName);
                 await _reloadTree();
             }
         }

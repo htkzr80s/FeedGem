@@ -8,21 +8,17 @@
 
     public class TreeTag
     {
+        public long Id { get; init; }
+
         public TreeNodeType Type { get; init; }
 
-        // Feed用
-        public long? FeedId { get; init; }
+        public string FolderPath { get; set; } = "/";
 
-        // Folder用
-        public string? FolderPath { get; init; }
-
-        // 表示名（共通）
         public string Name { get; set; } = string.Empty;
 
-        // 未読数（キャッシュ）
-        public int UnreadCount { get; set; }
+        public int UnreadCount { get; set; } = 0;
 
         // favicon
-        public string? Url { get; set; }
+        public string Url { get; set; } = string.Empty;
     }
 }
