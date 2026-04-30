@@ -67,6 +67,19 @@ namespace FeedGem.Services
             }
         }
 
+        // 指定されたIDとタイプに基づいて記事リストを返す
+        public async Task<List<ArticleItem>> GetEntriesAsync(long id, TreeNodeType type)
+        {
+            if (type == TreeNodeType.Folder)
+            {
+                return await _repository.GetEntriesByFolderAsync(id);
+            }
+            else
+            {
+                return await _repository.GetEntriesByFeedIdAsync(id);
+            }
+        }
+
         // 記事を既読にする
         public async Task MarkArticleAsReadAsync(ArticleItem article)
         {
@@ -101,7 +114,34 @@ namespace FeedGem.Services
         // フォルダ名変更
         public async Task RenameFolderAsync(long folderId, string newName)
         {
+            if (await _repository.FolderExistsAsync(newName))
+            {
+                throw new InvalidOperationException("同名のフォルダが既に存在します。");
+            }
             await _repository.RenameFolderAsync(folderId, newName);
+        }
+
+        // フォルダ追加
+        public async Task CreateFolderAsync(string folderName, TreeTag? parentTag)
+        {
+            if (await _repository.FolderExistsAsync(folderName))
+            {
+                throw new InvalidOperationException("同名のフォルダが既に存在します。");
+            }
+
+            // 親要素の情報を元に、新しいフォルダが属するパスを計算する
+            string parentPath = "/";
+            if (parentTag != null && parentTag.Type == TreeNodeType.Folder)
+            {
+                // ルート直下なら /名前、それ以外なら パス/名前 とする
+                parentPath = parentTag.FolderPath == "/"
+                    ? $"/{parentTag.Name}"
+                    : $"{parentTag.FolderPath}/{parentTag.Name}";
+            }
+
+            string folderUrl = $"folder://{Guid.NewGuid()}";
+
+            await _repository.AddFeedAsync(parentPath, folderName, folderUrl);
         }
 
         // フィード削除
@@ -110,8 +150,14 @@ namespace FeedGem.Services
             await _repository.DeleteFeedAsync(feedId);
         }
 
-        // フォルダ削除
-        public async Task DeleteFolderAsync(long folderId)
+        // フォルダ内にコンテンツ（フィード）が含まれているか確認する
+        public async Task<bool> HasFolderContentsAsync(long folderId)
+        {
+            return !await _repository.IsFolderEmptyAsync(folderId);
+        }
+
+        // フォルダ内含め全て削除する
+        public async Task DeleteFolderWithContentsAsync(long folderId)
         {
             await _repository.DeleteFolderAsync(folderId);
         }

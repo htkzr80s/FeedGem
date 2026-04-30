@@ -1,8 +1,6 @@
-﻿using FeedGem.Data;
-using FeedGem.Models;
+﻿using FeedGem.Models;
 using FeedGem.Services;
 using FeedGem.Views;
-using Microsoft.Data.Sqlite;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,7 +8,6 @@ using System.Windows.Input;
 namespace FeedGem.UIHelpers
 {
     public class ContextMenuBuilder(
-        FeedRepository repository,
         FeedService feedService,
         FeedUpdateService updateService,
         Func<Task> reloadTree,
@@ -20,7 +17,6 @@ namespace FeedGem.UIHelpers
         Func<Task> exportOpml,
         Func<Task> refreshCurrentListView)
     {
-        private readonly FeedRepository _repository = repository;
         private readonly FeedService _feedService = feedService;
         private readonly FeedUpdateService _updateService = updateService;
         private readonly Func<Task> _reloadTree = reloadTree;
@@ -37,7 +33,7 @@ namespace FeedGem.UIHelpers
 
             // 共通メニュー
             var refreshItem = new MenuItem { Header = "今すぐ更新" };
-            refreshItem.Click += async (s, e) => await RefreshAll();
+            refreshItem.Click += async (s, e) => await SyncAll();
             menu.Items.Add(refreshItem);
 
             var addFolderItem = new MenuItem { Header = "フォルダを作成..." };
@@ -148,18 +144,9 @@ namespace FeedGem.UIHelpers
             };
             deleteFolderItem.Click += async (s, e) =>
             {
-                // 現在のフォルダパスをタグから取得する
-                string folderPath = tag.FolderPath == "/" ? $"/{tag.Name}" : $"{tag.FolderPath}/{tag.Name}";
+                bool hasContents = await _feedService.HasFolderContentsAsync(folderId);
 
-                // データベースから全フィード情報を取得する
-                var allFeeds = await _repository.GetAllFeedsAsync();
-
-                // 削除対象のフォルダ内（サブフォルダ含む）にフィードが存在するか確認する
-                bool hasContents = allFeeds.Any(f =>
-                    !f.Url.StartsWith("folder://") &&
-                    (f.FolderPath == folderPath || f.FolderPath.StartsWith(folderPath + "/")));
-
-                // 中身がある場合はユーザーに最終確認を行う
+                // 中身がある場合のみ、ユーザーに最終確認を行う
                 if (hasContents)
                 {
                     var result = MessageBox.Show(
@@ -168,32 +155,23 @@ namespace FeedGem.UIHelpers
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Warning);
 
-                    if (result != MessageBoxResult.Yes)
-                    {
-                        return;
-                    }
+                    if (result != MessageBoxResult.Yes) return;
                 }
 
-                // メインウィンドウの表示パネルをクリアして、不正な参照を防ぐ
                 if (Application.Current.MainWindow is MainWindow main)
                 {
                     main.ClearAllPanels();
                 }
 
-                // サービスを介してフォルダと配下のデータを削除する
-                await _feedService.DeleteFolderAsync(folderId);
-
-                // 画面のツリー構造を最新の状態に更新する
+                await _feedService.DeleteFolderWithContentsAsync(folderId);
                 await _reloadTree();
-
-                // 現在表示中のリストビューを更新する
                 await _refreshCurrentListView();
             };
             menu.Items.Add(deleteFolderItem);
         }
 
         // 全更新
-        private async Task RefreshAll()
+        private async Task SyncAll()
         {
             _log.Text = "記事を更新中...";
             Mouse.OverrideCursor = Cursors.Wait;
@@ -208,7 +186,7 @@ namespace FeedGem.UIHelpers
             }
             catch (Exception ex)
             {
-                LoggingService.Error("全体更新失敗", ex);
+                LoggingService.Error("Failed to sync all", ex);
                 _log.Text = "更新中にエラーが発生しました。";
             }
             finally
@@ -220,7 +198,7 @@ namespace FeedGem.UIHelpers
         // フォルダ追加
         private async Task AddFolder(TreeViewItem? target)
         {
-            var dialog = new InputDialog("フォルダ名");
+            var dialog = new InputDialog("新しいフォルダ名");
             if (Application.Current?.MainWindow != null)
                 dialog.Owner = Application.Current.MainWindow;
 
@@ -229,27 +207,21 @@ namespace FeedGem.UIHelpers
             string name = dialog.InputText;
             if (string.IsNullOrWhiteSpace(name)) return;
 
-            if (await _repository.FolderExistsAsync(name))
-            {
-                MessageBox.Show("同名のフォルダが既に存在します。", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            string path = "/";
-            if (target?.Tag is TreeTag tag && tag.Type == TreeNodeType.Folder && tag.FolderPath != null)
-            {
-                path = tag.FolderPath;
-            }
-
             try
             {
-                await _repository.AddFeedAsync(path, name, "folder://" + Guid.NewGuid());
+                var parentTag = target?.Tag as TreeTag;
+
+                await _feedService.CreateFolderAsync(name, parentTag);
+                await _reloadTree();
             }
-            catch (SqliteException)
+            catch (InvalidOperationException ex)
             {
-                MessageBox.Show("同名のフォルダが既に存在します。", "エラー");
+                MessageBox.Show($"{ex.Message}\n別の名前を指定してください。", "名前の重複", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
-            await _reloadTree();
+            catch (Exception ex)
+            {
+                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         // 名前変更（フォルダ・フィード両対応）
@@ -257,60 +229,44 @@ namespace FeedGem.UIHelpers
         {
             if (item.Tag is not TreeTag tag) return;
 
-            if (tag.Type == TreeNodeType.Folder)
+            string currentName = tag.Name;
+            var dialog = new InputDialog("新しい名前", currentName);
+
+            if (Application.Current?.MainWindow != null)
+                dialog.Owner = Application.Current.MainWindow;
+
+            if (dialog.ShowDialog() != true) return;
+
+            string newName = dialog.InputText;
+
+            if (string.IsNullOrWhiteSpace(newName) || newName == currentName) return;
+
+            try
             {
-                string folderPath = tag.Id;
-                string current = folderPath.TrimStart('/');
-
-                var dialog = new InputDialog("新しい名前", current);
-                if (Application.Current?.MainWindow != null)
-                    dialog.Owner = Application.Current.MainWindow;
-
-                if (dialog.ShowDialog() != true) return;
-
-                string name = dialog.InputText;
-                if (string.IsNullOrWhiteSpace(name) || name == current) return;
-
-                if (await _repository.FolderExistsAsync(name))
+                // フォルダかフィードかで分岐してサービスに投げる
+                if (tag.Type == TreeNodeType.Folder)
                 {
-                    MessageBox.Show("同名のフォルダが既に存在します。", "エラー", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
+                    await _feedService.RenameFolderAsync(tag.Id, newName);
+                }
+                else
+                {
+                    await _feedService.RenameFeedAsync(tag.Id, newName);
                 }
 
-                try
-                {
-                    await _feedService.RenameFolderAsync(folderId, name);
-                }
-                catch (SqliteException)
-                {
-                    MessageBox.Show("同名のフォルダが既に存在します。", "エラー");
-                }
                 await _reloadTree();
             }
-            else if (tag.Type == TreeNodeType.Feed)
+            catch (InvalidOperationException ex)
             {
-                long feedId = tag.Id;
-                string currentTitle = tag.Name;
-                var dialog = new InputDialog("新しい名前", currentTitle);
-
-                // メインウィンドウを親に設定して、ダイアログが背面に隠れないようにする
-                if (Application.Current?.MainWindow != null)
-                    dialog.Owner = Application.Current.MainWindow;
-
-                if (dialog.ShowDialog() != true) return;
-
-                // 入力された文字列を取得し、空白チェックと変更有無を確認する
-                string newName = dialog.InputText;
-                if (string.IsNullOrWhiteSpace(newName) || newName == currentTitle) return;
-
-                // データベースの名前を更新し、UI（ツリー）をリロードして反映させる
-                await _feedService.RenameFeedAsync(feedId, newName);
-                await _reloadTree();
+                MessageBox.Show($"{ex.Message}\n別の名前を指定してください。", "名前の重複", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
         // フィード削除
-        private async Task DeleteFeed(long id)
+        private async Task DeleteFeed(long feedId)
         {
             if (MessageBox.Show("削除しますか？", "確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
                 return;
@@ -320,7 +276,7 @@ namespace FeedGem.UIHelpers
                 main.ClearAllPanels();
             }
 
-            await _feedService.DeleteFeedAsync(id);
+            await _feedService.DeleteFeedAsync(feedId);
             await _reloadTree();
             await _refreshCurrentListView();
         }

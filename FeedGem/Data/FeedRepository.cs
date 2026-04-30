@@ -1,7 +1,6 @@
 ﻿using FeedGem.Core;
 using FeedGem.Models;
 using Microsoft.Data.Sqlite;
-using System.Transactions;
 using static FeedGem.Data.FeedInfo;
 
 namespace FeedGem.Data
@@ -212,6 +211,73 @@ namespace FeedGem.Data
             return articles;
         }
 
+        public async Task<List<ArticleItem>> GetEntriesByFolderAsync(long folderId)
+        {
+            var articles = new List<ArticleItem>();
+            using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync();
+
+            // 1. まずフォルダのフルパスを特定する
+            string getPathQuery = "SELECT folder_path, title FROM feeds WHERE id = @id;";
+            string targetPath = "";
+            using (var cmdPath = new SqliteCommand(getPathQuery, connection))
+            {
+                cmdPath.Parameters.AddWithValue("@id", folderId);
+                using var reader = await cmdPath.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    string parentPath = reader.GetString(0);
+                    string folderName = reader.GetString(1);
+                    // ルート直下なら /名前、そうでなければ パス/名前
+                    targetPath = parentPath == "/" ? $"/{folderName}" : $"{parentPath}/{folderName}";
+                }
+            }
+
+            if (string.IsNullOrEmpty(targetPath)) return articles;
+
+            // 2. そのパス、または配下のパスに属する全記事を取得
+            string childPattern = targetPath + "/%";
+            string query = """
+                SELECT 
+                    e.title, 
+                    e.published_date, 
+                    e.url, 
+                    e.summary, 
+                    e.is_read, 
+                    f.title
+                FROM entries e
+                JOIN feeds f ON e.feed_id = f.id
+                WHERE f.folder_path = @targetPath 
+                   OR f.folder_path LIKE @childPattern
+                ORDER BY e.published_date DESC
+                """;
+
+            using var command = new SqliteCommand(query, connection);
+            command.Parameters.AddWithValue("@targetPath", targetPath);
+            command.Parameters.AddWithValue("@childPattern", childPattern);
+
+            using var entryReader = await command.ExecuteReaderAsync();
+
+            while (await entryReader.ReadAsync())
+            {
+                DateTime date = entryReader.IsDBNull(1)
+                    ? DateTime.MinValue
+                    : DateTime.Parse(entryReader.GetString(1));
+
+                articles.Add(new ArticleItem
+                {
+                    Title = entryReader.GetString(0),
+                    Date = date,
+                    Url = entryReader.GetString(2),
+                    Summary = entryReader.IsDBNull(3) ? "" : entryReader.GetString(3),
+                    IsRead = entryReader.GetInt32(4) == 1,
+                    FeedTitle = entryReader.GetString(5)
+                });
+            }
+
+            return articles;
+        }
+
         // フィード情報・フォルダを登録する
         public async Task<(long feedId, bool isNew)> AddFeedAsync(string folder, string title, string url)
         {
@@ -346,28 +412,13 @@ namespace FeedGem.Data
             }
         }
 
-        // 指定したフィードの未読記事数を取得する
-        public async Task<int> GetUnreadCountByFeedIdAsync(long feedId)
-        {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-
-            // is_read が 0（未読）のレコード数をカウントするクエリ
-            string query = "SELECT COUNT(*) FROM entries WHERE feed_id = @feedId AND is_read = 0";
-            using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@feedId", feedId);
-
-            // ExecuteScalarAsyncで結果の最初の1行1列（カウント数）を取得
-            var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt32(result); // int型に変換して返す
-        }
-
-        // フィードIDをキー、未読件数を値とする辞書を一括取得する
+        // 全フィードの未読件数を一括取得し、辞書形式で返す
         public async Task<Dictionary<long, int>> GetUnreadCountMapAsync()
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
+            // 未読記事（is_read = 0）をフィードIDごとにグループ化して集計する
             string query = """
                 SELECT feed_id, COUNT(*) as count
                 FROM entries
@@ -376,22 +427,24 @@ namespace FeedGem.Data
                 """;
 
             using var command = new SqliteCommand(query, connection);
-
             var result = new Dictionary<long, int>();
 
+            // データの読み取りを開始
             using var reader = await command.ExecuteReaderAsync();
 
+            // 取得したレコードを一つずつ辞書に追加
             while (await reader.ReadAsync())
             {
+                // 0列目がfeed_id、1列目がカウント数[cite: 1]
                 long feedId = reader.GetInt64(0);
                 int count = reader.GetInt32(1);
-
                 result[feedId] = count;
             }
 
             return result;
         }
 
+        // フィードのタイトル（title）のみを更新する
         public async Task UpdateFeedTitleAsync(long feedId, string newTitle)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -436,8 +489,9 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // トランザクション（まとめ処理）を非同期で開始
-            using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction;
+            // トランザクションを開始し、nullの場合は例外をスローする
+            using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction
+                ?? throw new InvalidOperationException("Failed to begin transaction.");
 
             try
             {
@@ -463,19 +517,44 @@ namespace FeedGem.Data
             }
         }
 
-        // 指定したフォルダ内に「実体のあるフィード」が存在するか確認する
-        public async Task<bool> IsFolderEmptyAsync(string folderPath)
+        // 指定したフォルダIDの配下に、実体のあるフィードが存在するか確認する
+        public async Task<bool> IsFolderEmptyAsync(long folderId)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // folder:// で始まる管理用データ以外の「本物のフィード」があるかカウントする
-            string query = "SELECT COUNT(*) FROM feeds WHERE folder_path = @path AND url NOT LIKE 'folder://%'";
-            using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@path", folderPath);
+            // 1. 自身の ID から、削除対象となるフォルダのフルパスを特定する
+            string getPathQuery = "SELECT folder_path, title FROM feeds WHERE id = @id;";
+            string targetFullPath = "";
 
-            var count = (long)(await command.ExecuteScalarAsync() ?? 0L);
-            return count == 0; // 0件なら空と判断
+            using (var cmdPath = new SqliteCommand(getPathQuery, connection))
+            {
+                cmdPath.Parameters.AddWithValue("@id", folderId);
+                using var reader = await cmdPath.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    string parentPath = reader.GetString(0);
+                    string folderName = reader.GetString(1);
+                    targetFullPath = parentPath == "/" ? $"/{folderName}" : $"{parentPath}/{folderName}";
+                }
+            }
+
+            if (string.IsNullOrEmpty(targetFullPath)) return true;
+
+            // 2. 特定したパス、またはその配下にある実体フィード（folder:// 以外）を数える
+            string childPattern = targetFullPath + "/%";
+            string countQuery = """
+                SELECT COUNT(*) FROM feeds 
+                WHERE (folder_path = @path OR folder_path LIKE @childPattern)
+                  AND url NOT LIKE 'folder://%'
+                """;
+
+            using var cmdCount = new SqliteCommand(countQuery, connection);
+            cmdCount.Parameters.AddWithValue("@path", targetFullPath);
+            cmdCount.Parameters.AddWithValue("@childPattern", childPattern);
+
+            var count = (long)(await cmdCount.ExecuteScalarAsync() ?? 0L);
+            return count == 0;
         }
 
         // フォルダとその配下の全データを削除する
@@ -688,15 +767,18 @@ namespace FeedGem.Data
 
             var command = connection.CreateCommand();
 
-            // error_state が 0（None）以外の行が1件でもあれば true を返す
+            // COUNT(*)の代わりにLIMIT 1を使用し、1件でも見つかれば即座に結果を返す
             command.CommandText = """
-                SELECT COUNT(*) FROM feeds
+                SELECT 1 FROM feeds
                 WHERE error_state != 0
                   AND url NOT LIKE 'folder://%'
+                LIMIT 1
                 """;
 
             var result = await command.ExecuteScalarAsync();
-            return Convert.ToInt64(result) > 0;
+
+            // 取得結果がnullでなければエラーが存在すると判定する
+            return result != null;
         }
 
         // フォルダ名をユニークにする
@@ -736,19 +818,21 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
+            // 存在確認のみのためLIMIT 1で検索を打ち切る
             string query = """
-                SELECT COUNT(*)
+                SELECT 1
                 FROM feeds
                 WHERE folder_path = '/'
                   AND title = @name
-                  AND url LIKE 'folder://%';
+                  AND url LIKE 'folder://%'
+                LIMIT 1;
                 """;
 
             using var cmd = new SqliteCommand(query, connection);
             cmd.Parameters.AddWithValue("@name", name);
 
-            var count = (long)(await cmd.ExecuteScalarAsync() ?? 0);
-            return count > 0;
+            var result = await cmd.ExecuteScalarAsync();
+            return result != null;
         }
     }
 

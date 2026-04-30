@@ -10,7 +10,7 @@ namespace FeedGem.Services
     {
         private readonly TaskbarIcon? _taskbarIcon;
         private readonly MainWindow _window;
-        private readonly UnreadCountService _unreadService;
+        private readonly UnreadCountService _unreadCountService;
         private readonly FeedRepository _repository;
 
         private BitmapImage? _normalTrayIcon;
@@ -21,7 +21,7 @@ namespace FeedGem.Services
         {
             _taskbarIcon = taskbarIcon;
             _window = window;
-            _unreadService = unreadService;
+            _unreadCountService = unreadService;
             _repository = repository;
 
             LoadIcons();
@@ -65,7 +65,7 @@ namespace FeedGem.Services
                 return;
             }
 
-            int totalUnread = await _unreadService.GetTotalUnreadAsync();
+            int totalUnread = await _unreadCountService.GetTotalUnreadAsync();
             _taskbarIcon.IconSource = totalUnread > 0 ? _unreadTrayIcon : _normalTrayIcon;
         }
     }

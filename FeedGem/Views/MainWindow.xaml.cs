@@ -20,9 +20,7 @@ namespace FeedGem.Views
 
         // データベース操作を専門に行うインスタンス
         private readonly FeedRepository _repository;
-
         private readonly FeedService _feedService;
-        private readonly FeedDiscoveryService _discoveryService;
         private readonly TreeBuilder _treeBuilder;
         private readonly ContextMenuBuilder _menuBuilder;
         private readonly TreeDragDropHandler _dragHandler;
@@ -31,8 +29,9 @@ namespace FeedGem.Views
         private readonly UrlSubscriptionService _subscriptionService;
         private readonly BackgroundUpdateTimer _backgroundTimer;
         private long? _currentSelectedFeedId;
+        private TreeNodeType? _currentSelectedType;
         private readonly TrayIconManager _trayManager;
-        private readonly UnreadCountService _unreadService;
+        private readonly UnreadCountService _unreadCountService;
 
         public MainWindow()
         {
@@ -44,18 +43,15 @@ namespace FeedGem.Views
             // データベースパスの決定とサービスの初期化を行う
             string dbPath = EnsureAndGetDatabasePath();
             _repository = new FeedRepository(dbPath);
-            _unreadService = new UnreadCountService(_repository);
+            _unreadCountService = new UnreadCountService(_repository);
             _feedService = new FeedService(_repository);
             _updateService = new FeedUpdateService(_repository, _feedService);
-            _discoveryService = new FeedDiscoveryService();
             _treeBuilder = new TreeBuilder(_repository);
             _opmlService = new OpmlService(_repository);
             _subscriptionService = new UrlSubscriptionService(_repository);
-
-            _trayManager = new TrayIconManager(TaskbarIcon, this, _unreadService, _repository);
+            _trayManager = new TrayIconManager(TaskbarIcon, this, _unreadCountService, _repository);
 
             _menuBuilder = new ContextMenuBuilder(
-                _repository,
                 _feedService,
                 _updateService,
                 LoadFeedsToTreeViewAsync,
@@ -137,6 +133,7 @@ namespace FeedGem.Views
 
                 // 起動時にデータを画面に反映させる
                 await LoadFeedsToTreeViewAsync();
+                await RefreshTreeUnreadDisplay();
 
                 // スケルトン（ダミー項目）を消去する
                 currentArticles.Clear();
@@ -742,18 +739,22 @@ namespace FeedGem.Views
         // TreeViewItemに選択イベントを再帰的に付与する
         private void AttachSelectionHandler(TreeViewItem item)
         {
-            if (item.Tag is TreeTag tag && tag.Id != null)
+            if (item.Tag is TreeTag tag)
             {
-                long feedId = tag.Id;
+                long targetId = tag.Id;
+                var type = tag.Type;
 
                 item.Selected += async (s, e) =>
                 {
                     e.Handled = true;
-                    _currentSelectedFeedId = feedId;
-                    await LoadEntriesToListViewAsync(feedId);
+                    _currentSelectedFeedId = targetId;
+                    _currentSelectedType = type;
+
+                    await LoadEntriesToListViewAsync(targetId, type);
                 };
             }
 
+            // 子要素にも再帰的にハンドラを付与する
             foreach (var child in item.Items)
             {
                 if (child is TreeViewItem childItem)
@@ -763,58 +764,43 @@ namespace FeedGem.Views
             }
         }
 
-        // 指定したフィードの記事を中央ペインに読み込む
-        private async Task LoadEntriesToListViewAsync(long feedId)
+        // 記事リストを表示する（フォルダ・フィード共通）
+        private async Task LoadEntriesToListViewAsync(long targetId, TreeNodeType type)
         {
             ArticleListView.ItemsSource = null;
-
             currentArticles.Clear();
 
-            var articles = await _repository.GetEntriesByFeedIdAsync(feedId);
-
-            foreach (var article in articles)
+            try
             {
-                currentArticles.Add(article);
+                var articles = await _feedService.GetEntriesAsync(targetId, type);
+
+                foreach (var article in articles)
+                {
+                    currentArticles.Add(article);
+                }
+                ArticleListView.ItemsSource = currentArticles;
             }
-            ArticleListView.ItemsSource = currentArticles;
+            catch (Exception ex)
+            {
+                MessageBox.Show($"記事の読み込みに失敗しました: {ex.Message}", "表示エラー");
+            }
         }
 
         private async Task RefreshCurrentArticleListAsync()
         {
-            if (_currentSelectedFeedId.HasValue)
+            // 何かを選択中、かつそのタイプ（フォルダかフィードか）が分かっている場合
+            if (_currentSelectedFeedId.HasValue && _currentSelectedType.HasValue)
             {
-                await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value);
+                // 統合したメソッドを呼び出して、画面を最新の状態にする
+                await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value, _currentSelectedType.Value);
             }
         }
 
-        // 未読数更新（差分のみ反映）
-        private async Task UpdateUnreadCountsRecursive(TreeViewItem item)
+        // 未読数更新
+        private async Task RefreshTreeUnreadDisplay()
         {
-            if (item.Tag is TreeTag tag && tag.Type == TreeNodeType.Feed && tag.Id != null)
-            {
-                int unread = await _repository.GetUnreadCountByFeedIdAsync(tag.Id);
-
-                // 差分があるときだけ更新
-                if (tag.UnreadCount != unread)
-                {
-                    tag.UnreadCount = unread;
-
-                    string displayName = unread > 0
-                        ? $"{tag.Name} ({unread})"
-                        : tag.Name;
-
-                    item.Header = FeedTreeHeader.Create(
-                        displayName,
-                        tag.Type == TreeNodeType.Folder,
-                        tag.Url
-                    );
-                }
-            }
-
-            foreach (TreeViewItem child in item.Items)
-            {
-                await UpdateUnreadCountsRecursive(child);
-            }
+            // ツリービューのルート項目（Items）を渡して一括更新を実行
+            await _unreadCountService.UpdateAllTreeViewUnreadCountsAsync(FeedTreeView.Items);
         }
     }
 }
