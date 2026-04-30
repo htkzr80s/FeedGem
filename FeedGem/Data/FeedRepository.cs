@@ -292,13 +292,20 @@ namespace FeedGem.Data
             var existing = await checkCommand.ExecuteScalarAsync();
             if (existing != null)
             {
-                return ((long)existing, false); // 既存
+                return ((long)existing, false);
             }
+
+            // 全データの中での最大 sort_order を取得する
+            string maxOrderQuery = "SELECT IFNULL(MAX(sort_order), -1) FROM feeds;";
+            using var maxOrderCommand = new SqliteCommand(maxOrderQuery, connection);
+
+            // 全体の最大値に 1 を加算して、絶対的な最後尾番号を決定する
+            int nextOrder = Convert.ToInt32(await maxOrderCommand.ExecuteScalarAsync()) + 1;
 
             // --- 新規登録 ---
             string insertQuery = """
-                INSERT INTO feeds (folder_path, title, url)
-                VALUES (@folder, @title, @url);
+                INSERT INTO feeds (folder_path, title, url, sort_order)
+                VALUES (@folder, @title, @url, @nextOrder);
                 SELECT last_insert_rowid();
                 """;
 
@@ -306,10 +313,11 @@ namespace FeedGem.Data
             insertCommand.Parameters.AddWithValue("@folder", folder);
             insertCommand.Parameters.AddWithValue("@title", title);
             insertCommand.Parameters.AddWithValue("@url", url);
+            insertCommand.Parameters.AddWithValue("@nextOrder", nextOrder);
 
             var result = await insertCommand.ExecuteScalarAsync();
 
-            return ((long)(result ?? 0), true); // 新規
+            return ((long)(result ?? 0), true);
         }
 
         // 記事データを保存する
