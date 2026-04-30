@@ -1,7 +1,6 @@
 ﻿using FeedGem.Core;
 using FeedGem.Models;
 using Microsoft.Data.Sqlite;
-using static FeedGem.Data.FeedInfo;
 
 namespace FeedGem.Data
 {
@@ -155,7 +154,7 @@ namespace FeedGem.Data
                     SortOrder = reader.GetInt32(4),
 
                     // エラー状態を読み込む（カラムがNULLの場合は None=0 にフォールバック）
-                    ErrorState = reader.IsDBNull(5) ? FeedErrorState.None : (FeedErrorState)reader.GetInt32(5),
+                    ErrorState = reader.IsDBNull(5) ? FeedInfo.FeedErrorState.None : (FeedInfo.FeedErrorState)reader.GetInt32(5),
                     LastSuccessTime = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
                     LastFailureTime = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
                 });
@@ -465,30 +464,55 @@ namespace FeedGem.Data
             await command.ExecuteNonQueryAsync();
         }
 
-        // 移動（フォルダパス）だけを変える
-        public async Task UpdateFeedPathAsync(long feedId, string newPath)
+        // フィードまたはフォルダの配置（所属パスと並び順）を更新する
+        public async Task UpdateFeedLayoutAsync(long feedId, string newPath, int newOrder)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
-            // folder_pathカラムのみを対象にする
-            string query = "UPDATE feeds SET folder_path = @path WHERE id = @id;";
+
+            // 移動先のパスと新しい並び順を同時に更新する
+            string query = "UPDATE feeds SET folder_path = @path, sort_order = @order WHERE id = @id;";
+
             using var command = new SqliteCommand(query, connection);
             command.Parameters.AddWithValue("@path", newPath);
+            command.Parameters.AddWithValue("@order", newOrder);
             command.Parameters.AddWithValue("@id", feedId);
+
             await command.ExecuteNonQueryAsync();
         }
 
-        // フィードの並び順（sort_order）のみを更新する
-        public async Task UpdateFeedSortOrderAsync(long feedId, int newOrder)
+        // フォルダ内の全項目に対して、かぶらない連番を再割り当てする一括更新メソッド
+        public async Task ReorderFolderItemsAsync(IEnumerable<(long Id, int Order)> items)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
-            // sort_orderカラムのみを対象にする
-            string query = "UPDATE feeds SET sort_order = @order WHERE id = @id;";
-            using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@order", newOrder);
-            command.Parameters.AddWithValue("@id", feedId);
-            await command.ExecuteNonQueryAsync();
+
+            // 複数の更新を一つの単位として扱い、整合性を保証する
+            using var transaction = await connection.BeginTransactionAsync();
+
+            try
+            {
+                foreach (var (id, order) in items)
+                {
+                    // IDをキーに、新しい重ならない連番(sort_order)をセットする
+                    string query = "UPDATE feeds SET sort_order = @order WHERE id = @id;";
+                    using var command = new SqliteCommand(query, connection);
+                    command.Parameters.AddWithValue("@order", order);
+                    command.Parameters.AddWithValue("@id", id);
+                    command.Transaction = (SqliteTransaction)transaction;
+
+                    await command.ExecuteNonQueryAsync();
+                }
+
+                // すべての更新が成功した場合のみ、データベースに反映する
+                await transaction.CommitAsync();
+            }
+            catch (Exception)
+            {
+                // 途中でエラーが起きた場合は、すべての変更を破棄して以前の状態を守る
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         // フィードを削除する（関連する記事も一緒に消す）
@@ -841,33 +865,6 @@ namespace FeedGem.Data
 
             var result = await cmd.ExecuteScalarAsync();
             return result != null;
-        }
-    }
-
-    // 内部管理用のシンプルなクラス
-    public class FeedInfo
-    {
-        public long Id { get; set; }
-        public string FolderPath { get; set; } = "/";
-        public string Title { get; set; } = string.Empty;
-        public string Url { get; set; } = string.Empty;
-        public int SortOrder { get; set; } = 0;
-
-        // エラー状態
-        public FeedErrorState ErrorState { get; set; } = FeedErrorState.None;
-
-        // 最終成功時刻
-        public DateTime? LastSuccessTime { get; set; }
-
-        // 最終失敗時刻
-        public DateTime? LastFailureTime { get; set; }
-
-        public enum FeedErrorState
-        {
-            None,
-            NotFound404,
-            TemporaryFailure,
-            LongFailure
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using FeedGem.Data;
+﻿using FeedGem.Models;
 using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Controls;

@@ -1,6 +1,4 @@
-﻿using FeedGem.Data;
-
-namespace FeedGem.Models
+﻿namespace FeedGem.Models
 {
     // ツリー表示用の純データモデル（UI非依存）
     public class TreeNodeModel

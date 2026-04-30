@@ -112,22 +112,27 @@ namespace FeedGem.UIHelpers
                 .ToList();
 
             int insertIndex = rootItems.Count;
+
+            // ドロップ先のアイテムを基準に挿入インデックスを算出
             if (targetItem != null && targetItem.Tag is TreeTag targetTag)
             {
                 var targetFeed = allFeeds.FirstOrDefault(f => f.Id == targetTag.Id);
                 if (targetFeed != null && targetFeed.FolderPath == "/")
                 {
                     int baseIndex = rootItems.FindIndex(f => f.Id == targetFeed.Id);
-                    insertIndex = isUpperHalf ? baseIndex : baseIndex + 1;
+                    if (baseIndex >= 0)
+                    {
+                        insertIndex = isUpperHalf ? baseIndex : baseIndex + 1;
+                    }
                 }
             }
 
-            // 新しい位置に挿入して一括更新
+            // 新しい位置に挿入する
             rootItems.Insert(Math.Max(0, Math.Min(insertIndex, rootItems.Count)), movingFolder);
-            for (int i = 0; i < rootItems.Count; i++)
-            {
-                await _repository.UpdateFeedSortOrderAsync(rootItems[i].Id, i);
-            }
+
+            // 新しい並び順を抽出して一括適用する
+            var updates = rootItems.Select((item, index) => (item.Id, index));
+            await _repository.ReorderFolderItemsAsync(updates);
         }
 
         // フィードの階層移動と並び順変更処理
@@ -136,12 +141,6 @@ namespace FeedGem.UIHelpers
             var movingFeed = allFeeds.FirstOrDefault(f => f.Id == sourceTag.Id);
             if (movingFeed == null) return;
 
-            // フォルダパスが変更される場合は更新
-            if (movingFeed.FolderPath != newPath)
-            {
-                await _repository.UpdateFeedPathAsync(movingFeed.Id, newPath);
-            }
-
             // 移動先の階層にいるアイテムリストを取得（自分以外）
             var siblings = allFeeds
                 .Where(f => f.FolderPath == newPath && f.Id != movingFeed.Id)
@@ -149,6 +148,8 @@ namespace FeedGem.UIHelpers
                 .ToList();
 
             int insertIndex = siblings.Count;
+
+            // ドロップ先のアイテムを基準に挿入インデックスを算出
             if (targetItem != null && targetItem.Tag is TreeTag targetTag)
             {
                 int baseIndex = siblings.FindIndex(f => f.Id == targetTag.Id);
@@ -158,12 +159,19 @@ namespace FeedGem.UIHelpers
                 }
             }
 
-            // 新しい並び順を適用
+            // 新しい位置に挿入する
             siblings.Insert(Math.Max(0, Math.Min(insertIndex, siblings.Count)), movingFeed);
-            for (int i = 0; i < siblings.Count; i++)
+
+            // フォルダパスが変更される場合は所属情報を更新
+            if (movingFeed.FolderPath != newPath)
             {
-                await _repository.UpdateFeedSortOrderAsync(siblings[i].Id, i);
+                int newOrder = siblings.IndexOf(movingFeed);
+                await _repository.UpdateFeedLayoutAsync(movingFeed.Id, newPath, newOrder);
             }
+
+            // 新しい並び順を抽出して一括適用する
+            var updates = siblings.Select((item, index) => (item.Id, index));
+            await _repository.ReorderFolderItemsAsync(updates);
         }
 
         // ビジュアルツリーを遡って特定の型の親を探す

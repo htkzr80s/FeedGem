@@ -1,5 +1,5 @@
 ﻿using FeedGem.Data;
-using static FeedGem.Data.FeedInfo;
+using FeedGem.Models;
 
 namespace FeedGem.Services
 {
@@ -24,19 +24,19 @@ namespace FeedGem.Services
                     try
                     {
                         // --- 404はスキップ ---
-                        if (feed.ErrorState == FeedErrorState.NotFound404)
+                        if (feed.ErrorState == FeedInfo.FeedErrorState.NotFound404)
                             return;
 
                         await _feedService.FetchEntriesAsync(feed.Id, feed.Url);
 
                         // --- 成功 ---
-                        feed.ErrorState = FeedErrorState.None;
+                        feed.ErrorState = FeedInfo.FeedErrorState.None;
                         feed.LastSuccessTime = DateTime.Now;
                     }
                     catch (FeedNotFoundException)
                     {
                         // --- 404 ---
-                        feed.ErrorState = FeedErrorState.NotFound404;
+                        feed.ErrorState = FeedInfo.FeedErrorState.NotFound404;
                         feed.LastFailureTime = DateTime.Now;
 
                         LoggingService.Error($"404: {feed.Title}", new Exception("404 Not Found"));
@@ -52,16 +52,16 @@ namespace FeedGem.Services
 
                             if (diff.TotalHours >= 24)
                             {
-                                feed.ErrorState = FeedErrorState.LongFailure;
+                                feed.ErrorState = FeedInfo.FeedErrorState.LongFailure;
                             }
                             else
                             {
-                                feed.ErrorState = FeedErrorState.TemporaryFailure;
+                                feed.ErrorState = FeedInfo.FeedErrorState.TemporaryFailure;
                             }
                         }
                         else
                         {
-                            feed.ErrorState = FeedErrorState.TemporaryFailure;
+                            feed.ErrorState = FeedInfo.FeedErrorState.TemporaryFailure;
                         }
 
                         LoggingService.Error($"更新失敗: {feed.Title}", ex);
