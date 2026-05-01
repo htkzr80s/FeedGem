@@ -25,14 +25,14 @@ namespace FeedGem.Data
                 {
                     cmd.ExecuteNonQuery();
                 }
-                
+
                 // --- 1. feedsテーブルの作成 ---
                 using (var cmd = new SqliteCommand("""
                     CREATE TABLE IF NOT EXISTS feeds (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        parent_id INTEGER DEFAULT 0,
+                        parent_id INTEGER DEFAULT NULL,
                         title TEXT NOT NULL,
-                        url TEXT NOT NULL,
+                        url TEXT NOT NULL DEFAULT '',
                         sort_order INTEGER DEFAULT 0,
                         error_state INTEGER DEFAULT 0,
                         last_success_time TEXT,
@@ -47,13 +47,13 @@ namespace FeedGem.Data
                 using (var cmd = new SqliteCommand("""
                     CREATE TABLE IF NOT EXISTS entries (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        feed_id INTEGER,
+                        feed_id INTEGER NOT NULL,
                         title TEXT NOT NULL,
                         url TEXT UNIQUE NOT NULL,
                         summary TEXT,
                         published_date TEXT,
                         is_read INTEGER DEFAULT 0,
-                        FOREIGN KEY(feed_id) REFERENCES feeds(id)
+                        FOREIGN KEY(feed_id) REFERENCES feeds(id) ON DELETE CASCADE
                     );
                     """, connection, transaction))
                 {
@@ -62,7 +62,8 @@ namespace FeedGem.Data
 
                 // --- 3. インデックスの作成 ---
                 using (var cmd = new SqliteCommand("""
-                    CREATE INDEX IF NOT EXISTS idx_entries_feedid ON entries(feed_id);
+                    CREATE INDEX IF NOT EXISTS idx_entries_feedid_date 
+                    ON entries(feed_id, published_date DESC);
                     """, connection, transaction))
                 {
                     cmd.ExecuteNonQuery();
@@ -106,7 +107,11 @@ namespace FeedGem.Data
                 SELECT id, parent_id, title, url, sort_order,
                        error_state, last_success_time, last_failure_time
                 FROM feeds
-                ORDER BY parent_id, sort_order, title
+                ORDER BY 
+                parent_id IS NOT NULL,
+                parent_id,
+                sort_order,
+                title
                 """;
 
             using var command = new SqliteCommand(query, connection);
@@ -117,15 +122,15 @@ namespace FeedGem.Data
                 feeds.Add(new FeedInfo
                 {
                     Id = reader.GetInt64(0),
-                    ParentId = reader.GetInt64(1),
+                    ParentId = reader.IsDBNull(1) ? null : reader.GetInt64(1),
                     Title = reader.GetString(2),
                     Url = reader.GetString(3),
                     SortOrder = reader.GetInt32(4),
 
                     // エラー状態を読み込む（カラムがNULLの場合は None=0 にフォールバック）
                     ErrorState = reader.IsDBNull(5) ? FeedInfo.FeedErrorState.None : (FeedInfo.FeedErrorState)reader.GetInt32(5),
-                    LastSuccessTime = reader.IsDBNull(6) ? null : reader.GetDateTime(6),
-                    LastFailureTime = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                    LastSuccessTime = reader.IsDBNull(6) ? null : DateTime.ParseExact(reader.GetString(6), "s", System.Globalization.CultureInfo.InvariantCulture),
+                    LastFailureTime = reader.IsDBNull(7) ? null : DateTime.ParseExact(reader.GetString(7), "s", System.Globalization.CultureInfo.InvariantCulture),
                 });
             }
             return feeds;
@@ -164,7 +169,7 @@ namespace FeedGem.Data
                 // 文字列として保存された日付を、プログラムで扱える DateTime 型に戻す
                 DateTime date = reader.IsDBNull(1)
                     ? DateTime.MinValue
-                    : DateTime.Parse(reader.GetString(1));
+                    : DateTime.ParseExact(reader.GetString(1), "s", System.Globalization.CultureInfo.InvariantCulture);
 
                 articles.Add(new ArticleItem
                 {
@@ -216,7 +221,7 @@ namespace FeedGem.Data
             {
                 DateTime date = entryReader.IsDBNull(1)
                     ? DateTime.MinValue
-                    : DateTime.Parse(entryReader.GetString(1));
+                    : DateTime.ParseExact(entryReader.GetString(1), "s", System.Globalization.CultureInfo.InvariantCulture);
 
                 articles.Add(new ArticleItem
                 {
@@ -233,7 +238,7 @@ namespace FeedGem.Data
         }
 
         // フィード情報・フォルダを登録する
-        public async Task<(long feedId, bool isNew)> AddFeedAsync(long parentId, string title, string url)
+        public async Task<(long feedId, bool isNew)> AddFeedAsync(long? parentId, string title, string url)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
@@ -253,28 +258,41 @@ namespace FeedGem.Data
             }
 
             // 指定された親階層内での最大 sort_order を取得する
-            string maxOrderQuery = "SELECT IFNULL(MAX(sort_order), -1) FROM feeds WHERE parent_id = @parentId;";
+            string maxOrderQuery = parentId == null
+                ? "SELECT IFNULL(MAX(sort_order), -1) FROM feeds WHERE parent_id IS NULL;"
+                : "SELECT IFNULL(MAX(sort_order), -1) FROM feeds WHERE parent_id = @parentId;";
             using var maxOrderCommand = new SqliteCommand(maxOrderQuery, connection);
-            maxOrderCommand.Parameters.AddWithValue("@parentId", parentId);
-
+            if (parentId != null)
+                maxOrderCommand.Parameters.AddWithValue("@parentId", parentId);
             int nextOrder = Convert.ToInt32(await maxOrderCommand.ExecuteScalarAsync()) + 1;
 
             // 新規登録
             string insertQuery = """
-                INSERT INTO feeds (parent_id, title, url, sort_order)
+                INSERT OR IGNORE INTO feeds (parent_id, title, url, sort_order)
                 VALUES (@parentId, @title, @url, @nextOrder);
-                SELECT last_insert_rowid();
+                RETURNING id;
                 """;
 
             using var insertCommand = new SqliteCommand(insertQuery, connection);
-            insertCommand.Parameters.AddWithValue("@parentId", parentId);
+            insertCommand.Parameters.AddWithValue("@parentId", (object?)parentId ?? DBNull.Value);
             insertCommand.Parameters.AddWithValue("@title", title);
             insertCommand.Parameters.AddWithValue("@url", url);
             insertCommand.Parameters.AddWithValue("@nextOrder", nextOrder);
 
             var result = await insertCommand.ExecuteScalarAsync();
 
-            return ((long)(result ?? 0), true);
+            // INSERT が競合してIDが取れなかった場合を防御する
+            if (result == null || result == DBNull.Value)
+            {
+                // ユニーク制約により挿入できなかった場合は既存IDを再取得して返す
+                string fallbackQuery = "SELECT id FROM feeds WHERE url = @url;";
+                using var fallbackCmd = new SqliteCommand(fallbackQuery, connection);
+                fallbackCmd.Parameters.AddWithValue("@url", url);
+                var existingId = await fallbackCmd.ExecuteScalarAsync();
+                return ((long)(existingId ?? 0L), false);
+            }
+
+            return ((long)result, true);
         }
 
         // 記事データを保存する
@@ -282,6 +300,12 @@ namespace FeedGem.Data
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
+
+            using (var pragma = new SqliteCommand("PRAGMA foreign_keys = ON;", connection))
+            {
+                await pragma.ExecuteNonQueryAsync();
+            }
+
             using var transaction = await connection.BeginTransactionAsync();
 
             foreach (var article in articles)
@@ -295,7 +319,7 @@ namespace FeedGem.Data
                 command.Parameters.AddWithValue("@feedId", feedId);
                 command.Parameters.AddWithValue("@title", article.Title);
                 command.Parameters.AddWithValue("@url", article.Url);
-                command.Parameters.AddWithValue("@summary", article.Summary);
+                command.Parameters.AddWithValue("@summary", (object?)article.Summary ?? DBNull.Value);
 
                 // 日付を ISO8601 形式（yyyy-MM-ddTHH:mm:ss）の文字列にして保存する
                 command.Parameters.AddWithValue("@pubDate", article.Date.ToString("s"));
@@ -423,6 +447,12 @@ namespace FeedGem.Data
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
+
+            using (var pragma = new SqliteCommand("PRAGMA foreign_keys = ON;", connection))
+            {
+                await pragma.ExecuteNonQueryAsync();
+            }
+
             using var transaction = await connection.BeginTransactionAsync();
 
             try
@@ -453,47 +483,55 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
+            using (var pragma = new SqliteCommand("PRAGMA foreign_keys = ON;", connection))
+            {
+                await pragma.ExecuteNonQueryAsync();
+            }
+
             using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction
                 ?? throw new InvalidOperationException("Failed to begin transaction.");
 
             try
             {
                 // 削除前に親IDと現在の並び順を取得する
-                long parentId = 0;
+                long? parentId = null;
                 int sortOrder = 0;
                 string getInfo = "SELECT parent_id, sort_order FROM feeds WHERE id = @id";
                 using (var cmdInfo = new SqliteCommand(getInfo, connection, transaction))
                 {
                     cmdInfo.Parameters.AddWithValue("@id", feedId);
                     using var reader = await cmdInfo.ExecuteReaderAsync();
+
                     if (await reader.ReadAsync())
                     {
-                        parentId = reader.GetInt64(0);
+                        parentId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
                         sortOrder = reader.GetInt32(1);
+                    }
+                    else
+                    {
+                        // 対象フィードが存在しない場合は何もせず終了する
+                        await transaction.RollbackAsync();
+                        return;
                     }
                 }
 
                 // 対象データの削除
-                string deleteEntries = "DELETE FROM entries WHERE feed_id = @id";
                 string deleteFeed = "DELETE FROM feeds WHERE id = @id";
 
-                using (var cmd1 = new SqliteCommand(deleteEntries, connection, transaction))
+                using (var cmd = new SqliteCommand(deleteFeed, connection, transaction))
                 {
-                    cmd1.Parameters.AddWithValue("@id", feedId);
-                    await cmd1.ExecuteNonQueryAsync();
-                }
-
-                using (var cmd2 = new SqliteCommand(deleteFeed, connection, transaction))
-                {
-                    cmd2.Parameters.AddWithValue("@id", feedId);
-                    await cmd2.ExecuteNonQueryAsync();
+                    cmd.Parameters.AddWithValue("@id", feedId);
+                    await cmd.ExecuteNonQueryAsync();
                 }
 
                 // 削除されたアイテムより後ろにあった同階層アイテムの順番を1つ繰り上げる
-                string shiftOrder = "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id = @parentId AND sort_order > @sortOrder";
+                string shiftOrder = parentId == null
+                    ? "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id IS NULL AND sort_order > @sortOrder"
+                    : "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id = @parentId AND sort_order > @sortOrder";
                 using (var cmdShift = new SqliteCommand(shiftOrder, connection, transaction))
                 {
-                    cmdShift.Parameters.AddWithValue("@parentId", parentId);
+                    if (parentId != null)
+                        cmdShift.Parameters.AddWithValue("@parentId", parentId);
                     cmdShift.Parameters.AddWithValue("@sortOrder", sortOrder);
                     await cmdShift.ExecuteNonQueryAsync();
                 }
@@ -539,13 +577,18 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
+            using (var pragma = new SqliteCommand("PRAGMA foreign_keys = ON;", connection))
+            {
+                await pragma.ExecuteNonQueryAsync();
+            }
+
             using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction
                 ?? throw new InvalidOperationException("Failed to begin transaction.");
 
             try
             {
                 // 削除対象の親IDと並び順を取得する
-                long parentId = 0;
+                long? parentId = null;
                 int sortOrder = 0;
                 string getInfo = "SELECT parent_id, sort_order FROM feeds WHERE id = @id";
                 using (var cmdInfo = new SqliteCommand(getInfo, connection, transaction))
@@ -554,29 +597,13 @@ namespace FeedGem.Data
                     using var reader = await cmdInfo.ExecuteReaderAsync();
                     if (await reader.ReadAsync())
                     {
-                        parentId = reader.GetInt64(0);
+                        parentId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
                         sortOrder = reader.GetInt32(1);
                     }
                     else
                     {
                         return; // 対象が見つからない場合は終了
                     }
-                }
-
-                // 子孫を一括削除するため、エントリとフィード両方に対してCTEを使用
-                string deleteEntries = """
-                    WITH RECURSIVE folder_tree(id) AS (
-                        SELECT @id
-                        UNION ALL
-                        SELECT f.id FROM feeds f JOIN folder_tree t ON f.parent_id = t.id
-                    )
-                    DELETE FROM entries WHERE feed_id IN folder_tree;
-                    """;
-
-                using (var cmd1 = new SqliteCommand(deleteEntries, connection, transaction))
-                {
-                    cmd1.Parameters.AddWithValue("@id", folderId);
-                    await cmd1.ExecuteNonQueryAsync();
                 }
 
                 string deleteFeeds = """
@@ -588,17 +615,20 @@ namespace FeedGem.Data
                     DELETE FROM feeds WHERE id IN folder_tree;
                     """;
 
-                using (var cmd2 = new SqliteCommand(deleteFeeds, connection, transaction))
+                using (var cmd = new SqliteCommand(deleteFeeds, connection, transaction))
                 {
-                    cmd2.Parameters.AddWithValue("@id", folderId);
-                    await cmd2.ExecuteNonQueryAsync();
+                    cmd.Parameters.AddWithValue("@id", folderId);
+                    await cmd.ExecuteNonQueryAsync();
                 }
 
                 // 親階層のアイテムの順番を1つ繰り上げる
-                string shiftOrder = "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id = @parentId AND sort_order > @sortOrder";
+                string shiftOrder = parentId == null
+                    ? "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id IS NULL AND sort_order > @sortOrder"
+                    : "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id = @parentId AND sort_order > @sortOrder";
                 using (var cmdShift = new SqliteCommand(shiftOrder, connection, transaction))
                 {
-                    cmdShift.Parameters.AddWithValue("@parentId", parentId);
+                    if (parentId != null)
+                        cmdShift.Parameters.AddWithValue("@parentId", parentId);
                     cmdShift.Parameters.AddWithValue("@sortOrder", sortOrder);
                     await cmdShift.ExecuteNonQueryAsync();
                 }
@@ -635,7 +665,7 @@ namespace FeedGem.Data
                 DELETE FROM entries 
                 WHERE id IN (
                     SELECT id FROM (
-                        SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY published_date DESC) as rn 
+                        SELECT id, ROW_NUMBER() OVER (PARTITION BY feed_id ORDER BY (published_date IS NULL), published_date DESC) as rn 
                         FROM entries
                     ) WHERE rn > @maxCount
                 )
@@ -661,18 +691,13 @@ namespace FeedGem.Data
                     error_state = $ErrorState, 
                     last_success_time = $LastSuccessTime, 
                     last_failure_time = $LastFailureTime
-                WHERE Id = $Id
+                WHERE id = @id
                 """;
 
-            command.Parameters.Add("$ErrorState", SqliteType.Integer);
-            command.Parameters.Add("$LastSuccessTime", SqliteType.Text);
-            command.Parameters.Add("$LastFailureTime", SqliteType.Text);
-            command.Parameters.Add("$Id", SqliteType.Integer);
-
-            command.Parameters["$ErrorState"].Value = (int)feed.ErrorState;
-            command.Parameters["$LastSuccessTime"].Value = (object?)feed.LastSuccessTime ?? DBNull.Value;
-            command.Parameters["$LastFailureTime"].Value = (object?)feed.LastFailureTime ?? DBNull.Value;
-            command.Parameters["$Id"].Value = feed.Id;
+            command.Parameters.AddWithValue("@errorState", (int)feed.ErrorState);
+            command.Parameters.AddWithValue("@lastSuccessTime", feed.LastSuccessTime?.ToString("s") ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@lastFailureTime", feed.LastFailureTime?.ToString("s") ?? (object)DBNull.Value);
+            command.Parameters.AddWithValue("@id", feed.Id);
 
             await command.ExecuteNonQueryAsync();
         }
