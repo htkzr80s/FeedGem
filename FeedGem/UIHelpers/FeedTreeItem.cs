@@ -22,24 +22,17 @@ namespace FeedGem.UIHelpers
             var item = new TreeViewItem
             {
                 Header = header,
-                // 後で識別しやすいようにタグ情報を格納する
-                Tag = node.IsFolder
-                    ? new TreeTag
-                    {
-                        Id = node.Id,
-                        Type = TreeNodeType.Folder,
-                        FolderPath = node.Path,
-                        Name = node.Name,
-                        UnreadCount = node.UnreadCount
-                    }
-                    : new TreeTag
-                    {
-                        Id = node.Id,
-                        Type = TreeNodeType.Feed,
-                        Name = node.Name,
-                        UnreadCount = node.UnreadCount,
-                        Url = node.Url
-                    },
+                // Tagに必要な情報をすべて詰め込む
+                Tag = new TreeTag
+                {
+                    Id = node.Id,
+                    ParentId = node.ParentId ?? 0,  // 親のIDがnullの場合は、DB上の管理に合わせて適切に処理する
+                    Type = node.IsFolder ? TreeNodeType.Folder : TreeNodeType.Feed,
+                    Name = node.Name,
+                    UnreadCount = node.UnreadCount,
+                    SortOrder = node.SortOrder,
+                    Url = node.Url
+                },
                 IsExpanded = true
             };
 
