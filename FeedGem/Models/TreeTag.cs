@@ -12,8 +12,8 @@
 
         public TreeNodeType Type { get; init; }
 
-        // folder_path を撤廃し、親のIDで管理
-        public long ParentId { get; set; }
+        // 親のIDで管理
+        public long? ParentId { get; set; }
 
         public string Name { get; set; } = string.Empty;
 

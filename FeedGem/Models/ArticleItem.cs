@@ -13,8 +13,6 @@ namespace FeedGem.Models
         private string _summary = "";
         private string _feedTitle = "";
         private bool _isRead = false;
-        private long _feedId;
-        private string _folderPath = "";
 
         // 記事タイトル
         public string Title
@@ -61,20 +59,6 @@ namespace FeedGem.Models
         {
             get => _feedTitle;
             set { if (_feedTitle != value) { _feedTitle = value; OnPropertyChanged(); } }
-        }
-
-        // フィードID（内部識別用）
-        public long FeedId
-        {
-            get => _feedId;
-            set { if (_feedId != value) { _feedId = value; OnPropertyChanged(); } }
-        }
-
-        // フォルダパス（フォルダ既読判定用）
-        public string FolderPath
-        {
-            get => _folderPath;
-            set { if (_folderPath != value) { _folderPath = value; OnPropertyChanged(); } }
         }
 
         // 未読・既読の判定フラグ（false: 未読, true: 既読）
