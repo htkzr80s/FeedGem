@@ -12,13 +12,17 @@
 
         public TreeNodeType Type { get; init; }
 
-        public string FolderPath { get; set; } = "/";
+        // folder_path を撤廃し、親のIDで管理
+        public long ParentId { get; set; }
 
         public string Name { get; set; } = string.Empty;
 
         public int UnreadCount { get; set; } = 0;
 
-        // favicon
+        // 並び順を保持
+        public int SortOrder { get; set; }
+
+        // favicon または フィードURL
         public string Url { get; set; } = string.Empty;
     }
 }
