@@ -59,7 +59,7 @@ namespace FeedGem.UIHelpers
             var targetItem = FindAncestor<TreeViewItem>((DependencyObject)e.OriginalSource);
             if (targetItem == _dragSourceItem) return;
 
-            string newFolderPath = "/";
+            long? newParentId = null;
             bool isUpperHalf = false;
 
             // 挿入位置の計算（ターゲットの上下どちらに落としたか）
@@ -71,86 +71,40 @@ namespace FeedGem.UIHelpers
 
                 if (targetTag.Type == TreeNodeType.Folder)
                 {
-                    if (!isFolderMove)
-                    {
-                        newFolderPath = targetTag.FolderPath;
-                    }
+                    newParentId = null;
                 }
                 else
                 {
-                    newFolderPath = targetTag.FolderPath;
+                    // ターゲットがフォルダならその中に、フィードならその親と同じ階層へ
+                    newParentId = targetTag.Type == TreeNodeType.Folder
+                        ? targetTag.Id
+                        : (targetTag.ParentId == 0 ? null : targetTag.ParentId);
                 }
             }
 
             var feeds = await _repository.GetAllFeedsAsync();
 
-            if (isFolderMove)
-            {
-                // フォルダの移動（常にルート階層に配置し、並び順を更新）
-                await ProcessFolderMove(feeds, sourceTag, targetItem, isUpperHalf);
-            }
-            else
-            {
-                // フィードの移動
-                await ProcessFeedMove(feeds, sourceTag, newFolderPath, targetItem, isUpperHalf);
-            }
-
+            // 統合された移動処理を呼び出す
+            await ProcessMove(feeds, sourceTag, newParentId, targetItem, isUpperHalf);
             await _reloadTree();
         }
 
-        // フォルダの並び順変更処理
-        private async Task ProcessFolderMove(List<FeedInfo> allFeeds, TreeTag sourceTag, TreeViewItem? targetItem, bool isUpperHalf)
+        // 階層移動と並び順変更の統合処理
+        private async Task ProcessMove(List<FeedInfo> allFeeds, TreeTag sourceTag, long? newParentId, TreeViewItem? targetItem, bool isUpperHalf)
         {
-            // フォルダ名で対象のダミーフィード（folder://）を特定
-            var movingFolder = allFeeds.FirstOrDefault(f => f.Url == $"folder://{sourceTag.Name}");
-            if (movingFolder == null) return;
+            var movingItem = allFeeds.FirstOrDefault(f => f.Id == sourceTag.Id);
+            if (movingItem == null) return;
 
-            // ルートにあるフォルダとフィードを抽出
-            var rootItems = allFeeds
-                .Where(f => f.FolderPath == "/" && f.Id != movingFolder.Id)
-                .OrderBy(f => f.SortOrder)
-                .ToList();
-
-            int insertIndex = rootItems.Count;
-
-            // ドロップ先のアイテムを基準に挿入インデックスを算出
-            if (targetItem != null && targetItem.Tag is TreeTag targetTag)
-            {
-                var targetFeed = allFeeds.FirstOrDefault(f => f.Id == targetTag.Id);
-                if (targetFeed != null && targetFeed.FolderPath == "/")
-                {
-                    int baseIndex = rootItems.FindIndex(f => f.Id == targetFeed.Id);
-                    if (baseIndex >= 0)
-                    {
-                        insertIndex = isUpperHalf ? baseIndex : baseIndex + 1;
-                    }
-                }
-            }
-
-            // 新しい位置に挿入する
-            rootItems.Insert(Math.Max(0, Math.Min(insertIndex, rootItems.Count)), movingFolder);
-
-            // 新しい並び順を抽出して一括適用する
-            var updates = rootItems.Select((item, index) => (item.Id, index));
-            await _repository.ReorderFolderItemsAsync(updates);
-        }
-
-        // フィードの階層移動と並び順変更処理
-        private async Task ProcessFeedMove(List<FeedInfo> allFeeds, TreeTag sourceTag, string newPath, TreeViewItem? targetItem, bool isUpperHalf)
-        {
-            var movingFeed = allFeeds.FirstOrDefault(f => f.Id == sourceTag.Id);
-            if (movingFeed == null) return;
-
-            // 移動先の階層にいるアイテムリストを取得（自分以外）
+            // 移動先の階層にいるアイテムリストを取得（移動するアイテム自身は除外）
             var siblings = allFeeds
-                .Where(f => f.FolderPath == newPath && f.Id != movingFeed.Id)
+                .Where(f => f.ParentId == newParentId && f.Id != movingItem.Id)
                 .OrderBy(f => f.SortOrder)
                 .ToList();
 
-            int insertIndex = siblings.Count;
+            int insertIndex = siblings.Count; // デフォルトは末尾追加
 
-            // ドロップ先のアイテムを基準に挿入インデックスを算出
-            if (targetItem != null && targetItem.Tag is TreeTag targetTag)
+            // ドロップ先が同じ階層のアイテムだった場合、挿入インデックスを算出
+            if (targetItem != null && targetItem.Tag is TreeTag targetTag && targetTag.ParentId == newParentId)
             {
                 int baseIndex = siblings.FindIndex(f => f.Id == targetTag.Id);
                 if (baseIndex >= 0)
@@ -160,13 +114,13 @@ namespace FeedGem.UIHelpers
             }
 
             // 新しい位置に挿入する
-            siblings.Insert(Math.Max(0, Math.Min(insertIndex, siblings.Count)), movingFeed);
+            siblings.Insert(Math.Max(0, Math.Min(insertIndex, siblings.Count)), movingItem);
 
-            // フォルダパスが変更される場合は所属情報を更新
-            if (movingFeed.FolderPath != newPath)
+            // 所属する親IDが変わる場合はデータベースのレイアウト情報を更新
+            if (movingItem.ParentId != newParentId)
             {
-                int newOrder = siblings.IndexOf(movingFeed);
-                await _repository.UpdateFeedLayoutAsync(movingFeed.Id, newPath, newOrder);
+                int newOrder = siblings.IndexOf(movingItem);
+                await _repository.UpdateFeedLayoutAsync(movingItem.Id, newParentId, newOrder);
             }
 
             // 新しい並び順を抽出して一括適用する

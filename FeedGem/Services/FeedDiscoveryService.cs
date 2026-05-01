@@ -1,6 +1,5 @@
 ﻿using FeedGem.Models;
 using HtmlAgilityPack;
-using System.Net.Http;
 using System.ServiceModel.Syndication;
 using System.Xml;
 

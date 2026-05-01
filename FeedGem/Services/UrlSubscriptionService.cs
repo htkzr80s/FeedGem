@@ -76,7 +76,7 @@ namespace FeedGem.Services
                 }
 
                 // --- 登録 ---
-                (feedId, isNew) = await _repository.AddFeedAsync("/", title, candidate.Url);
+                (feedId, isNew) = await _repository.AddFeedAsync(null, title, candidate.Url);
 
                 // --- 既に登録済みかチェック ---
                 if (!isNew)

@@ -427,7 +427,7 @@ namespace FeedGem.Data
         }
 
         // フィードまたはフォルダの配置（所属と並び順）を更新する
-        public async Task UpdateFeedLayoutAsync(long feedId, long newParentId, int newOrder)
+        public async Task UpdateFeedLayoutAsync(long feedId, long? newParentId, int newOrder)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
