@@ -16,20 +16,25 @@ namespace FeedGem.Services
             // 並列数制御
             var semaphore = new SemaphoreSlim(5);
 
+            // 各フィードに対する更新タスクを作成
             var tasks = feeds
-                .Where(f => !f.Url.StartsWith("folder://"))
+                .Where(f => !string.IsNullOrEmpty(f.Url))
                 .Select(async feed =>
                 {
+                    // セマフォが空くまで待機
                     await semaphore.WaitAsync();
                     try
                     {
-                        // --- 404はスキップ ---
+                        // 404エラーが確定しているフィードは、無駄な通信を避けるためスキップ
                         if (feed.ErrorState == FeedInfo.FeedErrorState.NotFound404)
+                        {
                             return;
+                        }
 
+                        // フィードの取得と記事の保存処理を実行
                         await _feedService.FetchEntriesAsync(feed.Id, feed.Url);
 
-                        // --- 成功 ---
+                        // 更新に成功したため、エラー状態をクリアし成功時刻を記録
                         feed.ErrorState = FeedInfo.FeedErrorState.None;
                         feed.LastSuccessTime = DateTime.Now;
                     }
@@ -64,7 +69,7 @@ namespace FeedGem.Services
                             feed.ErrorState = FeedInfo.FeedErrorState.TemporaryFailure;
                         }
 
-                        LoggingService.Error($"更新失敗: {feed.Title}", ex);
+                        LoggingService.Error($"UpdateFailure: {feed.Title}", ex);
                     }
                     finally
                     {

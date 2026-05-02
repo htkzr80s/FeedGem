@@ -30,6 +30,7 @@ namespace FeedGem.UIHelpers
         public ContextMenu Build(TreeViewItem? treeViewItem)
         {
             var menu = new ContextMenu();
+            var tag = treeViewItem?.Tag as TreeTag;
 
             // 共通メニュー
             var refreshItem = new MenuItem { Header = "今すぐ更新" };
@@ -52,21 +53,21 @@ namespace FeedGem.UIHelpers
             menu.Items.Add(exportOpmlItem);
 
             // ノード（フィードまたはフォルダ）固有のメニュー項目を構築する
-            if (treeViewItem?.Tag is TreeTag tag)
+            // treeViewItem（右クリックした項目）の Tag に TreeTag というデータが入っているか確認する
+            if (treeViewItem?.Tag is TreeTag SpecTag)
             {
-                // IDが有効な場合のみ、固有メニューを追加する
-                if (tag.Id > 0)
+                // データベース上のIDが正しく割り振られている（0より大きい）場合のみ処理を続行する
+                if (SpecTag.Id > 0)
                 {
                     menu.Items.Add(new Separator());
 
-                    // ノードの種類に応じて専用のメニュー項目を追加する
-                    if (tag.Type == TreeNodeType.Feed)
+                    if (SpecTag.Type == TreeNodeType.Feed)
                     {
-                        AddFeedSpecificItems(menu, tag.Id, treeViewItem);
+                        AddFeedSpecificItems(menu, SpecTag.Id, treeViewItem);
                     }
-                    else if (tag.Type == TreeNodeType.Folder)
+                    else if (SpecTag.Type == TreeNodeType.Folder)
                     {
-                        AddFolderSpecificItems(menu, tag.Id, treeViewItem);
+                        AddFolderSpecificItems(menu, SpecTag.Id, treeViewItem);
                     }
                 }
             }
@@ -199,28 +200,36 @@ namespace FeedGem.UIHelpers
         private async Task AddFolder(TreeViewItem? target)
         {
             var dialog = new InputDialog("新しいフォルダ名");
+
             if (Application.Current?.MainWindow != null)
                 dialog.Owner = Application.Current.MainWindow;
 
             if (dialog.ShowDialog() != true) return;
 
-            string name = dialog.InputText;
-            if (string.IsNullOrWhiteSpace(name)) return;
+            string name = dialog.InputText?.Trim() ?? string.Empty;
+
+            // 名前が空文字の場合はエラーを表示して終了する
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                MessageBox.Show("フォルダ名を入力してください。", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
             try
             {
-                var parentTag = target?.Tag as TreeTag;
+                long? parentId = null;
 
-                await _feedService.CreateFolderAsync(name, parentTag);
+                if (target?.Tag is TreeTag tag)
+                {
+                    parentId = null;
+                }
+
+                await _feedService.CreateFolderAsync(name, parentId);
                 await _reloadTree();
-            }
-            catch (InvalidOperationException ex)
-            {
-                MessageBox.Show($"{ex.Message}\n別の名前を指定してください。", "名前の重複", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -255,13 +264,9 @@ namespace FeedGem.UIHelpers
 
                 await _reloadTree();
             }
-            catch (InvalidOperationException ex)
-            {
-                MessageBox.Show($"{ex.Message}\n別の名前を指定してください。", "名前の重複", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
             catch (Exception ex)
             {
-                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "エラー", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

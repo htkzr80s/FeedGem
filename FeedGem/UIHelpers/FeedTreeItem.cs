@@ -26,7 +26,7 @@ namespace FeedGem.UIHelpers
                 Tag = new TreeTag
                 {
                     Id = node.Id,
-                    ParentId = node.ParentId ?? 0,  // 親のIDがnullの場合は、DB上の管理に合わせて適切に処理する
+                    ParentId = node.ParentId,
                     Type = node.IsFolder ? TreeNodeType.Folder : TreeNodeType.Feed,
                     Name = node.Name,
                     UnreadCount = node.UnreadCount,

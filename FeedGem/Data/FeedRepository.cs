@@ -268,9 +268,9 @@ namespace FeedGem.Data
 
             // 新規登録
             string insertQuery = """
-                INSERT OR IGNORE INTO feeds (parent_id, title, url, sort_order)
+                INSERT INTO feeds (parent_id, title, url, sort_order)
                 VALUES (@parentId, @title, @url, @nextOrder);
-                RETURNING id;
+                SELECT last_insert_rowid();
                 """;
 
             using var insertCommand = new SqliteCommand(insertQuery, connection);
@@ -432,10 +432,16 @@ namespace FeedGem.Data
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            string query = "UPDATE feeds SET parent_id = @parentId, sort_order = @order WHERE id = @id;";
+            // parent_id と sort_order を更新する
+            const string query = """
+                UPDATE feeds 
+                SET parent_id = @parentId, sort_order = @order 
+                WHERE id = @id;
+                """;
 
             using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@parentId", newParentId);
+            // 引数の newParentId が null の場合は DBNull.Value をセットする
+            command.Parameters.AddWithValue("@parentId", (object?)newParentId ?? DBNull.Value);
             command.Parameters.AddWithValue("@order", newOrder);
             command.Parameters.AddWithValue("@id", feedId);
 
@@ -688,9 +694,9 @@ namespace FeedGem.Data
             command.CommandText = """
                 UPDATE feeds 
                 SET 
-                    error_state = $ErrorState, 
-                    last_success_time = $LastSuccessTime, 
-                    last_failure_time = $LastFailureTime
+                    error_state = @errorState, 
+                    last_success_time = @lastSuccessTime, 
+                    last_failure_time = @lastFailureTime
                 WHERE id = @id
                 """;
 

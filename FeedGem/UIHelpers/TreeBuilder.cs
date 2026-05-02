@@ -24,7 +24,7 @@ namespace FeedGem.UIHelpers
                 var node = new TreeNodeModel
                 {
                     Id = feed.Id,
-                    ParentId = feed.ParentId ?? 0,
+                    ParentId = feed.ParentId,
                     Name = feed.Title,
                     IsFolder = string.IsNullOrEmpty(feed.Url), // URLが空ならフォルダと判定
                     Url = feed.Url,

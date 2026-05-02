@@ -62,23 +62,23 @@ namespace FeedGem.UIHelpers
             long? newParentId = null;
             bool isUpperHalf = false;
 
-            // 挿入位置の計算（ターゲットの上下どちらに落としたか）
+            // ターゲットが存在し、かつタグ情報を持っている場合
             if (targetItem != null && targetItem.Tag is TreeTag targetTag)
             {
-                var dropPos = e.GetPosition(targetItem);
-                double itemHeight = targetItem.ActualHeight > 0 ? targetItem.ActualHeight : 32.0;
-                isUpperHalf = dropPos.Y < itemHeight / 2;
-
                 if (targetTag.Type == TreeNodeType.Folder)
                 {
-                    newParentId = null;
+                    // フォルダの上に落としたなら、そのフォルダのIDを新しい親にする
+                    newParentId = targetTag.Id;
                 }
                 else
                 {
-                    // ターゲットがフォルダならその中に、フィードならその親と同じ階層へ
-                    newParentId = targetTag.Type == TreeNodeType.Folder
-                        ? targetTag.Id
-                        : (targetTag.ParentId == 0 ? null : targetTag.ParentId);
+                    // ターゲットがフィードなら、そのフィードの親と同じ階層に設定
+                    newParentId = targetTag.ParentId == 0 ? null : targetTag.ParentId;
+
+                    // マウス位置がアイテムの上半分か下半分かを判定して挿入位置を決める
+                    var dropPos = e.GetPosition(targetItem);
+                    double itemHeight = targetItem.ActualHeight > 0 ? targetItem.ActualHeight : 32.0;
+                    isUpperHalf = dropPos.Y < itemHeight / 2;
                 }
             }
 

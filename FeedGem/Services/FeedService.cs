@@ -114,34 +114,13 @@ namespace FeedGem.Services
         // フォルダ名変更
         public async Task RenameFolderAsync(long folderId, string newName)
         {
-            if (await _repository.FolderExistsAsync(newName))
-            {
-                throw new InvalidOperationException("同名のフォルダが既に存在します。");
-            }
             await _repository.RenameFolderAsync(folderId, newName);
         }
 
         // フォルダ追加
-        public async Task CreateFolderAsync(string folderName, TreeTag? parentTag)
+        public async Task CreateFolderAsync(string folderName, long? parentId)
         {
-            if (await _repository.FolderExistsAsync(folderName))
-            {
-                throw new InvalidOperationException("同名のフォルダが既に存在します。");
-            }
-
-            // 親要素の情報を元に、新しいフォルダが属するパスを計算する
-            string parentPath = "/";
-            if (parentTag != null && parentTag.Type == TreeNodeType.Folder)
-            {
-                // ルート直下なら /名前、それ以外なら パス/名前 とする
-                parentPath = parentTag.FolderPath == "/"
-                    ? $"/{parentTag.Name}"
-                    : $"{parentTag.FolderPath}/{parentTag.Name}";
-            }
-
-            string folderUrl = $"folder://{Guid.NewGuid()}";
-
-            await _repository.AddFeedAsync(parentPath, folderName, folderUrl);
+            await _repository.AddFeedAsync(parentId, folderName, "");
         }
 
         // フィード削除

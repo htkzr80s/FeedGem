@@ -44,10 +44,10 @@ namespace FeedGem.Services
                 };
                 using var reader = XmlReader.Create(stream, settings);
 
-                var feed = SyndicationFeed.Load(reader);
-
-                if (feed != null)
+                if (reader.ReadToFollowing("rdf:RDF") || reader.ReadToFollowing("rss") || reader.ReadToFollowing("feed"))
                 {
+                    // リーダーの位置を調整してからロードを試みる
+                    var feed = SyndicationFeed.Load(reader);
                     string type = "Unknown";
 
                     if (reader.LocalName == "feed")
