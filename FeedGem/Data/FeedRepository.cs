@@ -136,65 +136,17 @@ namespace FeedGem.Data
             return feeds;
         }
 
-        // 特定のフィードに属する記事一覧を取得する
-        public async Task<List<ArticleItem>> GetEntriesByFeedIdAsync(long feedId)
+        // 指定したID（フィードまたはフォルダ）に属する記事一覧を取得する
+        public async Task<List<ArticleItem>> GetEntriesAsync(long id)
         {
             var articles = new List<ArticleItem>();
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            // 日付の降順で記事を取得
-            string query = """
-                SELECT 
-                    e.title, 
-                    e.published_date, 
-                    e.url, 
-                    e.summary, 
-                    e.is_read, 
-                    f.title
-                FROM entries e
-                JOIN feeds f ON e.feed_id = f.id
-                WHERE e.feed_id = @feedId
-                ORDER BY e.published_date DESC
-                """;
-
-            using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@feedId", feedId);
-
-            using var reader = await command.ExecuteReaderAsync();
-
-            // 取得したレコードをコレクションに追加
-            while (await reader.ReadAsync())
-            {
-                // 文字列として保存された日付を、プログラムで扱える DateTime 型に戻す
-                DateTime date = reader.IsDBNull(1)
-                    ? DateTime.MinValue
-                    : DateTime.ParseExact(reader.GetString(1), "s", System.Globalization.CultureInfo.InvariantCulture);
-
-                articles.Add(new ArticleItem
-                {
-                    Title = reader.GetString(0),
-                    Date = date,
-                    Url = reader.GetString(2),
-                    Summary = reader.IsDBNull(3) ? "" : reader.GetString(3),
-                    IsRead = reader.GetInt32(4) == 1,
-                    FeedTitle = reader.GetString(5)
-                });
-            }
-            return articles;
-        }
-
-        // 特定フォルダおよびその配下のフィードに属する記事一覧を取得する
-        public async Task<List<ArticleItem>> GetEntriesByFolderAsync(long folderId)
-        {
-            var articles = new List<ArticleItem>();
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-
-            // CTE（再帰クエリ）を使用して、対象フォルダとそのすべての子孫IDを取得する
+            // 対象IDとその子孫を再帰的に取得し、紐づく記事を日付降順で抽出する
             string query = """
                 WITH RECURSIVE folder_tree(id) AS (
-                    SELECT @folderId
+                    SELECT @id
                     UNION ALL
                     SELECT f.id FROM feeds f
                     JOIN folder_tree t ON f.parent_id = t.id
@@ -213,24 +165,25 @@ namespace FeedGem.Data
                 """;
 
             using var command = new SqliteCommand(query, connection);
-            command.Parameters.AddWithValue("@folderId", folderId);
+            command.Parameters.AddWithValue("@id", id);
 
-            using var entryReader = await command.ExecuteReaderAsync();
+            using var reader = await command.ExecuteReaderAsync();
 
-            while (await entryReader.ReadAsync())
+            while (await reader.ReadAsync())
             {
-                DateTime date = entryReader.IsDBNull(1)
+                // DB上の文字列日付をDateTime型に変換。NULLの場合はMinValueを設定する
+                DateTime date = reader.IsDBNull(1)
                     ? DateTime.MinValue
-                    : DateTime.ParseExact(entryReader.GetString(1), "s", System.Globalization.CultureInfo.InvariantCulture);
+                    : DateTime.ParseExact(reader.GetString(1), "s", System.Globalization.CultureInfo.InvariantCulture);
 
                 articles.Add(new ArticleItem
                 {
-                    Title = entryReader.GetString(0),
+                    Title = reader.GetString(0),
                     Date = date,
-                    Url = entryReader.GetString(2),
-                    Summary = entryReader.IsDBNull(3) ? "" : entryReader.GetString(3),
-                    IsRead = entryReader.GetInt32(4) == 1,
-                    FeedTitle = entryReader.GetString(5)
+                    Url = reader.GetString(2),
+                    Summary = reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    IsRead = reader.GetInt32(4) == 1,
+                    FeedTitle = reader.GetString(5)
                 });
             }
 
@@ -343,34 +296,16 @@ namespace FeedGem.Data
             await command.ExecuteNonQueryAsync();
         }
 
-        // 指定フィードの全記事を既読にする（一括更新）
-        public async Task MarkAllAsReadAsync(long feedId)
+        // 指定したID（フィードまたはフォルダ）配下の全記事を既読にする
+        public async Task MarkAsReadByIdAsync(long id)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
 
-            using var command = connection.CreateCommand();
-            command.CommandText = """
-                UPDATE entries
-                SET is_read = 1
-                WHERE feed_id = @feedId;
-                """;
-
-            command.Parameters.AddWithValue("@feedId", feedId);
-
-            await command.ExecuteNonQueryAsync();
-        }
-
-        // 指定したフォルダ配下のすべての記事を既読にする
-        public async Task MarkFolderEntriesAsReadAsync(long folderId)
-        {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-
-            // CTEを利用して配下のfeed_idを特定し、一括で更新する
+            // 対象IDとその子孫を特定し、一括で更新する
             string updateQuery = """
                 WITH RECURSIVE folder_tree(id) AS (
-                    SELECT @folderId
+                    SELECT @id
                     UNION ALL
                     SELECT f.id FROM feeds f
                     JOIN folder_tree t ON f.parent_id = t.id
@@ -381,7 +316,7 @@ namespace FeedGem.Data
                 """;
 
             using var cmd = new SqliteCommand(updateQuery, connection);
-            cmd.Parameters.AddWithValue("@folderId", folderId);
+            cmd.Parameters.AddWithValue("@id", id);
             await cmd.ExecuteNonQueryAsync();
         }
 
@@ -483,8 +418,8 @@ namespace FeedGem.Data
             }
         }
 
-        // フィードを削除し、同じ階層の並び順を詰める
-        public async Task DeleteFeedAsync(long feedId)
+        // 指定したID（フィードまたはフォルダ配下全て）を削除し、同階層の並び順を詰める
+        public async Task DeleteItemAsync(long id)
         {
             using var connection = new SqliteConnection(_connectionString);
             await connection.OpenAsync();
@@ -499,15 +434,17 @@ namespace FeedGem.Data
 
             try
             {
-                // 削除前に親IDと現在の並び順を取得する
+                // 削除対象の親IDと現在の並び順を取得する
                 long? parentId = null;
                 int sortOrder = 0;
                 string getInfo = "SELECT parent_id, sort_order FROM feeds WHERE id = @id";
+
                 using (var cmdInfo = new SqliteCommand(getInfo, connection, transaction))
                 {
-                    cmdInfo.Parameters.AddWithValue("@id", feedId);
+                    cmdInfo.Parameters.AddWithValue("@id", id);
                     using var reader = await cmdInfo.ExecuteReaderAsync();
 
+                    // 対象レコードが存在しない場合はロールバックして終了する
                     if (await reader.ReadAsync())
                     {
                         parentId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
@@ -515,18 +452,24 @@ namespace FeedGem.Data
                     }
                     else
                     {
-                        // 対象フィードが存在しない場合は何もせず終了する
                         await transaction.RollbackAsync();
                         return;
                     }
                 }
 
-                // 対象データの削除
-                string deleteFeed = "DELETE FROM feeds WHERE id = @id";
+                // CTEを用いて指定IDとその子孫を全て削除する
+                string deleteFeeds = """
+                    WITH RECURSIVE folder_tree(id) AS (
+                        SELECT @id
+                        UNION ALL
+                        SELECT f.id FROM feeds f JOIN folder_tree t ON f.parent_id = t.id
+                    )
+                    DELETE FROM feeds WHERE id IN folder_tree;
+                    """;
 
-                using (var cmd = new SqliteCommand(deleteFeed, connection, transaction))
+                using (var cmd = new SqliteCommand(deleteFeeds, connection, transaction))
                 {
-                    cmd.Parameters.AddWithValue("@id", feedId);
+                    cmd.Parameters.AddWithValue("@id", id);
                     await cmd.ExecuteNonQueryAsync();
                 }
 
@@ -534,20 +477,22 @@ namespace FeedGem.Data
                 string shiftOrder = parentId == null
                     ? "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id IS NULL AND sort_order > @sortOrder"
                     : "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id = @parentId AND sort_order > @sortOrder";
+
                 using (var cmdShift = new SqliteCommand(shiftOrder, connection, transaction))
                 {
                     if (parentId != null)
                         cmdShift.Parameters.AddWithValue("@parentId", parentId);
+
                     cmdShift.Parameters.AddWithValue("@sortOrder", sortOrder);
                     await cmdShift.ExecuteNonQueryAsync();
                 }
 
                 await transaction.CommitAsync();
             }
-            catch
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                throw;
+                throw new InvalidOperationException($"Failed to delete item (ID: {id}).", ex);
             }
         }
 
@@ -575,77 +520,6 @@ namespace FeedGem.Data
 
             var count = (long)(await cmdCount.ExecuteScalarAsync() ?? 0L);
             return count == 0;
-        }
-
-        // フォルダとその配下の全データを削除し、親階層の並び順を詰める
-        public async Task DeleteFolderAsync(long folderId)
-        {
-            using var connection = new SqliteConnection(_connectionString);
-            await connection.OpenAsync();
-
-            using (var pragma = new SqliteCommand("PRAGMA foreign_keys = ON;", connection))
-            {
-                await pragma.ExecuteNonQueryAsync();
-            }
-
-            using var transaction = await connection.BeginTransactionAsync() as SqliteTransaction
-                ?? throw new InvalidOperationException("Failed to begin transaction.");
-
-            try
-            {
-                // 削除対象の親IDと並び順を取得する
-                long? parentId = null;
-                int sortOrder = 0;
-                string getInfo = "SELECT parent_id, sort_order FROM feeds WHERE id = @id";
-                using (var cmdInfo = new SqliteCommand(getInfo, connection, transaction))
-                {
-                    cmdInfo.Parameters.AddWithValue("@id", folderId);
-                    using var reader = await cmdInfo.ExecuteReaderAsync();
-                    if (await reader.ReadAsync())
-                    {
-                        parentId = reader.IsDBNull(0) ? null : reader.GetInt64(0);
-                        sortOrder = reader.GetInt32(1);
-                    }
-                    else
-                    {
-                        return; // 対象が見つからない場合は終了
-                    }
-                }
-
-                string deleteFeeds = """
-                    WITH RECURSIVE folder_tree(id) AS (
-                        SELECT @id
-                        UNION ALL
-                        SELECT f.id FROM feeds f JOIN folder_tree t ON f.parent_id = t.id
-                    )
-                    DELETE FROM feeds WHERE id IN folder_tree;
-                    """;
-
-                using (var cmd = new SqliteCommand(deleteFeeds, connection, transaction))
-                {
-                    cmd.Parameters.AddWithValue("@id", folderId);
-                    await cmd.ExecuteNonQueryAsync();
-                }
-
-                // 親階層のアイテムの順番を1つ繰り上げる
-                string shiftOrder = parentId == null
-                    ? "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id IS NULL AND sort_order > @sortOrder"
-                    : "UPDATE feeds SET sort_order = sort_order - 1 WHERE parent_id = @parentId AND sort_order > @sortOrder";
-                using (var cmdShift = new SqliteCommand(shiftOrder, connection, transaction))
-                {
-                    if (parentId != null)
-                        cmdShift.Parameters.AddWithValue("@parentId", parentId);
-                    cmdShift.Parameters.AddWithValue("@sortOrder", sortOrder);
-                    await cmdShift.ExecuteNonQueryAsync();
-                }
-
-                await transaction.CommitAsync();
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                throw new InvalidOperationException($"Failed to delete folder (ID: {folderId}).", ex);
-            }
         }
 
         // フォルダ名を変更する

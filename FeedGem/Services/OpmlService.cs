@@ -38,7 +38,7 @@ namespace FeedGem.Services
                     // textまたはtitle属性から表示名を取得
                     string title = (outline.Attribute("text")?.Value
                                 ?? outline.Attribute("title")?.Value
-                                ?? "無題").Trim();
+                                ?? "NoTitle").Trim();
 
                     // XML配信用のURLを取得
                     string xmlUrl = (outline.Attribute("xmlUrl")?.Value ?? "").Trim();

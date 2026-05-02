@@ -91,7 +91,7 @@ namespace FeedGem.Services
                 // 1件も取れなければ無効扱い
                 if (parsedItems.Count == 0)
                 {
-                    await _repository.DeleteFeedAsync(feedId);
+                    await _repository.DeleteItemAsync(feedId);
                     return SubscribeResult.SkippedOrEmpty;
                 }
 
@@ -110,7 +110,7 @@ namespace FeedGem.Services
                 {
                     try
                     {
-                        await _repository.DeleteFeedAsync(feedId);
+                        await _repository.DeleteItemAsync(feedId);
                     }
                     catch (Exception deleteEx)
                     {

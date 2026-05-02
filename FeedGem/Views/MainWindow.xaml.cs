@@ -57,8 +57,7 @@ namespace FeedGem.Views
                 LogTextBlock,
                 UpdateLastUpdateTime,
                 ImportOpmlAsync,
-                ExportOpmlAsync,
-                RefreshCurrentArticleListAsync
+                ExportOpmlAsync
             );
 
             _feedService.DataChanged += async () =>
@@ -758,7 +757,7 @@ namespace FeedGem.Views
                     _currentSelectedFeedId = targetId;
                     _currentSelectedType = type;
 
-                    await LoadEntriesToListViewAsync(targetId, type);
+                    await LoadEntriesToListViewAsync(targetId);
                 };
             }
 
@@ -773,14 +772,14 @@ namespace FeedGem.Views
         }
 
         // 記事リストを表示する（フォルダ・フィード共通）
-        private async Task LoadEntriesToListViewAsync(long targetId, TreeNodeType type)
+        private async Task LoadEntriesToListViewAsync(long targetId)
         {
             ArticleListView.ItemsSource = null;
             currentArticles.Clear();
 
             try
             {
-                var articles = await _feedService.GetEntriesAsync(targetId, type);
+                var articles = await _feedService.GetEntriesAsync(targetId);
 
                 foreach (var article in articles)
                 {
@@ -796,11 +795,10 @@ namespace FeedGem.Views
 
         private async Task RefreshCurrentArticleListAsync()
         {
-            // 何かを選択中、かつそのタイプ（フォルダかフィードか）が分かっている場合
-            if (_currentSelectedFeedId.HasValue && _currentSelectedType.HasValue)
+            // 何かが選択されている場合のみ処理を実行する
+            if (_currentSelectedFeedId.HasValue)
             {
-                // 統合したメソッドを呼び出して、画面を最新の状態にする
-                await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value, _currentSelectedType.Value);
+                await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value);
             }
         }
 

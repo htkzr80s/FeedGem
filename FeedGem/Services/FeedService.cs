@@ -68,17 +68,10 @@ namespace FeedGem.Services
             }
         }
 
-        // 指定されたIDとタイプに基づいて記事リストを返す
-        public async Task<List<ArticleItem>> GetEntriesAsync(long id, TreeNodeType type)
+        // 指定されたIDの記事リストを返す
+        public async Task<List<ArticleItem>> GetEntriesAsync(long id)
         {
-            if (type == TreeNodeType.Folder)
-            {
-                return await _repository.GetEntriesByFolderAsync(id);
-            }
-            else
-            {
-                return await _repository.GetEntriesByFeedIdAsync(id);
-            }
+            return await _repository.GetEntriesAsync(id);
         }
 
         // 記事を既読にする
@@ -94,17 +87,10 @@ namespace FeedGem.Services
             }
         }
 
-        // 指定フィードをすべて既読にする
-        public async Task MarkAllAsReadAsync(long feedId)
+        // 指定したフィードとフォルダをすべて既読にする
+        public async Task MarkAllAsReadAsync(long Id)
         {
-            await _repository.MarkAllAsReadAsync(feedId);
-            NotifyDataChanged();
-        }
-
-        // 指定したフォルダ内のすべてのフィード記事を既読にする
-        public async Task MarkFolderAsReadAsync(long folderId)
-        {
-            await _repository.MarkFolderEntriesAsReadAsync(folderId);
+            await _repository.MarkAsReadByIdAsync(Id);
             NotifyDataChanged();
         }
 
@@ -129,10 +115,10 @@ namespace FeedGem.Services
             NotifyDataChanged();
         }
 
-        // フィード削除
-        public async Task DeleteFeedAsync(long feedId)
+        // フィードとフォルダの削除
+        public async Task DeleteItemAsync(long Id)
         {
-            await _repository.DeleteFeedAsync(feedId);
+            await _repository.DeleteItemAsync(Id);
             NotifyDataChanged();
         }
 
@@ -140,13 +126,6 @@ namespace FeedGem.Services
         public async Task<bool> HasFolderContentsAsync(long folderId)
         {
             return !await _repository.IsFolderEmptyAsync(folderId);
-        }
-
-        // フォルダ内含め全て削除する
-        public async Task DeleteFolderWithContentsAsync(long folderId)
-        {
-            await _repository.DeleteFolderAsync(folderId);
-            NotifyDataChanged();
         }
 
         // 共通の通知処理
