@@ -1,4 +1,5 @@
 ﻿using FeedGem.Data;
+using FeedGem.Models;
 using System.Xml.Linq;
 
 namespace FeedGem.Services
@@ -30,7 +31,7 @@ namespace FeedGem.Services
             );
 
             // 再帰的に要素を処理する内部関数
-            async Task ProcessOutlineSemiFlattened(IEnumerable<XElement> elements, string parentPath = "/")
+            async Task ProcessOutlineSemiFlattened(IEnumerable<XElement> elements, long? currentParentId = null)
             {
                 foreach (var outline in elements)
                 {
@@ -51,7 +52,7 @@ namespace FeedGem.Services
                         // 重複チェックを行い、未登録の場合のみ追加
                         if (!existingUrls.Contains(normalized))
                         {
-                            await _repository.AddFeedAsync(parentPath, title, normalized);
+                            await _repository.AddFeedAsync(currentParentId, title, normalized);
                             existingUrls.Add(normalized); // 同一ファイル内の重複対策
                             added++;
                         }
@@ -63,28 +64,28 @@ namespace FeedGem.Services
                     else
                     {
                         // URLがない場合（フォルダ項目）
-                        if (parentPath == "/")
+                        var children = outline.Elements("outline");
+                        if (!children.Any()) continue;
+
+                        if (currentParentId == null)
                         {
                             // ルート階層なら新しいフォルダを作成
-                            string uniqueName = await _repository.GetUniqueFolderNameAsync(title);
-
-                            // フォルダを識別するための擬似URLを生成して登録
-                            await _repository.AddFeedAsync("/", uniqueName, "folder://" + Guid.NewGuid());
+                            var (folderId, _) = await _repository.AddFeedAsync(null, title, "");
 
                             // 子要素をそのフォルダ配下として処理
-                            await ProcessOutlineSemiFlattened(outline.Elements("outline"), "/" + uniqueName);
+                            await ProcessOutlineSemiFlattened(children, folderId);
                         }
                         else
                         {
                             // 既にサブフォルダ内なら、階層を深くせず現在のフォルダに子要素を展開
-                            await ProcessOutlineSemiFlattened(outline.Elements("outline"), parentPath);
+                            await ProcessOutlineSemiFlattened(children, currentParentId);
                         }
                     }
                 }
             }
 
             // 初回呼び出し
-            await ProcessOutlineSemiFlattened(body.Elements("outline"), "/");
+            await ProcessOutlineSemiFlattened(body.Elements("outline"), null);
 
             return (total, added, skipped);
         }
@@ -92,55 +93,64 @@ namespace FeedGem.Services
         // OPMLエクスポート
         public async Task<XDocument> ExportAsync()
         {
-            // 全フィードを取得
-            var feeds = await _repository.GetAllFeedsAsync();
+            // データベースからすべてのフィードとフォルダの情報を取得する
+            var allItems = await _repository.GetAllFeedsAsync();
 
-            // XMLのルート構造を作成
+            // OPMLの基本構造（ルート、ヘッダー、ボディ）を定義する
             var root = new XElement("opml",
                 new XAttribute("version", "2.0"),
                 new XElement("head", new XElement("title", "FeedGem Export")),
                 new XElement("body"));
 
             var body = root.Element("body");
+            // 構造に問題がある場合は空のドキュメントを返す
             if (body == null) return new XDocument(root);
 
-            // フォルダパスの前後の空白やスラッシュを整理してグループ化
-            // これにより、表記の揺れによるフォルダの重複を防ぐ
-            var folders = feeds.GroupBy(f => f.FolderPath.Trim().Trim('/') switch
-            {
-                "" => "/", // 空文字やスラッシュのみはルートとして扱う
-                var path => path
-            });
+            // まず、ルート階層（親IDがnull）にあるアイテムを抽出する
+            var rootItems = allItems.Where(f => f.ParentId == null).OrderBy(f => f.SortOrder);
 
-            foreach (var folder in folders)
+            foreach (var item in rootItems)
             {
-                XContainer target = body;
-
-                // ルート以外（特定のフォルダ名がある場合）はフォルダノードを作成
-                if (folder.Key != "/")
+                // URLが空でない場合は、ルート直下のフィードとして追加する
+                if (!string.IsNullOrEmpty(item.Url))
                 {
-                    var folderNode = new XElement("outline",
-                        new XAttribute("text", folder.Key)); // すでに正規化済みのためそのまま使用
-
-                    body.Add(folderNode);
-                    target = folderNode; // 以降のフィードはこのフォルダの中に追加する
+                    body.Add(CreateFeedOutline(item));
                 }
-
-                foreach (var f in folder)
+                else
                 {
-                    // フォルダ自身を示す特殊なURLはエクスポートから除外
-                    if (f.Url.StartsWith("folder://")) continue;
+                    // URLが空の場合はフォルダとして扱い、その中身も抽出する
+                    var folderNode = new XElement("outline", new XAttribute("text", item.Title));
 
-                    // フィード情報の追加
-                    target.Add(new XElement("outline",
-                        new XAttribute("text", f.Title),
-                        new XAttribute("title", f.Title),
-                        new XAttribute("type", "rss"),
-                        new XAttribute("xmlUrl", f.Url)));
+                    // このフォルダを親に持つ（ParentIdがこのフォルダのIdと一致する）アイテムを取得
+                    var children = allItems.Where(f => f.ParentId == item.Id).OrderBy(f => f.SortOrder);
+
+                    foreach (var child in children)
+                    {
+                        // 子要素がフィードであればフォルダノードの中に追加する
+                        if (!string.IsNullOrEmpty(child.Url))
+                        {
+                            folderNode.Add(CreateFeedOutline(child));
+                        }
+                        // 現在の仕様では階層は1段までのため、子フォルダの再帰処理は行わない
+                    }
+
+                    // 中身が存在するフォルダ、または空でもフォルダとして存在させる場合はbodyに追加
+                    body.Add(folderNode);
                 }
             }
 
             return new XDocument(new XDeclaration("1.0", "utf-8", "yes"), root);
+        }
+
+        // フィード情報をOPMLのoutline要素に変換するための補助メソッド
+        private static XElement CreateFeedOutline(FeedInfo f)
+        {
+            // RSSフィードとして標準的な属性をセットする
+            return new XElement("outline",
+                new XAttribute("text", f.Title),
+                new XAttribute("title", f.Title),
+                new XAttribute("type", "rss"),
+                new XAttribute("xmlUrl", f.Url));
         }
     }
 }
