@@ -8,6 +8,7 @@ namespace FeedGem.Services
     public class FeedService(FeedRepository repository)
     {
         private readonly FeedRepository _repository = repository;
+        public event Action? DataChanged;
 
         // フィード取得＆記事保存
         public async Task FetchEntriesAsync(long feedId, string url)
@@ -45,7 +46,7 @@ namespace FeedGem.Services
                 // --- Stream取得 ---
                 using var stream = await response.Content.ReadAsStreamAsync();
 
-                var articles = FeedParser.Parse(stream, targetUrl)
+                var articles = FeedParser.Parse(stream)
                     .OrderByDescending(a => a.Date)
                     .Take(AppSettings.MaxArticleCount)
                     .ToList();
@@ -97,36 +98,42 @@ namespace FeedGem.Services
         public async Task MarkAllAsReadAsync(long feedId)
         {
             await _repository.MarkAllAsReadAsync(feedId);
+            NotifyDataChanged();
         }
 
         // 指定したフォルダ内のすべてのフィード記事を既読にする
         public async Task MarkFolderAsReadAsync(long folderId)
         {
             await _repository.MarkFolderEntriesAsReadAsync(folderId);
+            NotifyDataChanged();
         }
 
         // フィード名変更
         public async Task RenameFeedAsync(long feedId, string newName)
         {
             await _repository.UpdateFeedTitleAsync(feedId, newName);
+            NotifyDataChanged();
         }
 
         // フォルダ名変更
         public async Task RenameFolderAsync(long folderId, string newName)
         {
             await _repository.RenameFolderAsync(folderId, newName);
+            NotifyDataChanged();
         }
 
         // フォルダ追加
         public async Task CreateFolderAsync(string folderName, long? parentId)
         {
             await _repository.AddFeedAsync(parentId, folderName, "");
+            NotifyDataChanged();
         }
 
         // フィード削除
         public async Task DeleteFeedAsync(long feedId)
         {
             await _repository.DeleteFeedAsync(feedId);
+            NotifyDataChanged();
         }
 
         // フォルダ内にコンテンツ（フィード）が含まれているか確認する
@@ -139,6 +146,13 @@ namespace FeedGem.Services
         public async Task DeleteFolderWithContentsAsync(long folderId)
         {
             await _repository.DeleteFolderAsync(folderId);
+            NotifyDataChanged();
+        }
+
+        // 共通の通知処理
+        public void NotifyDataChanged()
+        {
+            DataChanged?.Invoke();
         }
     }
 

@@ -1,190 +1,178 @@
 ﻿using FeedGem.Models;
 using System.IO;
-using System.ServiceModel.Syndication;
-using System.Xml;
 using System.Xml.Linq;
+using System.Text.RegularExpressions;
 
 namespace FeedGem.Services
 {
-    public static class FeedParser
+    public static partial class FeedParser
     {
-        // URL解決（relative → absolute）
-        private static string ResolveUrl(string baseUrl, string relativeUrl)
+        [GeneratedRegex("<[^>]*>")]
+        private static partial Regex HtmlTagRegex();
+
+        // RSSまたはAtomフィードのストリームを解析し、記事リストを返す
+        public static List<ArticleItem> Parse(Stream stream)
         {
-            if (string.IsNullOrEmpty(relativeUrl))
-                return baseUrl;
+            XDocument doc;
 
-            // すでに絶対URLならそのまま
-            if (Uri.TryCreate(relativeUrl, UriKind.Absolute, out var absolute))
-                return absolute.ToString();
-
-            if (Uri.TryCreate(new Uri(baseUrl), relativeUrl, out var resolved))
-                return resolved.ToString();
-
-            return relativeUrl;
-        }
-
-        // フィード解析（RSS / Atom / RDF）
-        public static List<ArticleItem> Parse(Stream stream, string baseUrl)
-        {
-            // ストリームをメモリにコピー
-            using var ms = new MemoryStream();
-            stream.CopyTo(ms);
-
-            // --- RSS / Atom を先に試す ---
+            // XML読み込みに失敗した場合は空リストを返す
             try
             {
-                ms.Position = 0;
-
-                var settings = new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Ignore,
-                    XmlResolver = null
-                };
-
-                using var reader = XmlReader.Create(ms, settings);
-                var feed = SyndicationFeed.Load(reader);
-
-                // アイテムが取得できた場合のみ採用する
-                if (feed != null && feed.Items.Any())
-                {
-                    return [.. feed.Items.Select(item => ParseItem(item, baseUrl))];
-                }
+                doc = XDocument.Load(stream);
             }
             catch
             {
-                // RSS/Atom解析失敗は無視してRDFへ進む
+                return [];
             }
 
-            // --- RDF を試す（必ず実行される） ---
-            ms.Position = 0;
-            return ParseRdf(ms, baseUrl);
+            var root = doc.Root;
+            if (root == null) return [];
+
+            // Atom 1.0 の判定
+            if (root.Name.LocalName == "feed")
+                return ParseAtom(doc);
+
+            // RSS 2.0 / RSS 1.0(RDF) の判定
+            if (root.Name.LocalName == "rss" || root.Name.LocalName == "RDF")
+                return ParseRss(doc);
+
+            return [];
         }
 
-        // RSS / Atom の1記事解析
-        private static ArticleItem ParseItem(SyndicationItem item, string baseUrl)
+        // Atom 1.0 形式を解析する
+        private static List<ArticleItem> ParseAtom(XDocument doc)
         {
-            string title = item.Title?.Text ?? "";
+            XNamespace ns = "http://www.w3.org/2005/Atom";
+            var root = doc.Root!;
 
-            // 元URL取得
-            string rawLink = item.Links.FirstOrDefault()?.Uri.ToString() ?? "";
+            string feedTitle = root.Element(ns + "title")?.Value ?? "";
 
-            string link = ResolveUrl(baseUrl, rawLink);
+            var articles = new List<ArticleItem>();
 
-            // 本文取得
-            string summary = "";
-
-            var encodedExt = item.ElementExtensions
-                .FirstOrDefault(e => e.OuterName == "encoded" || e.OuterName == "content");
-
-            if (encodedExt != null)
+            foreach (var entry in root.Elements(ns + "entry"))
             {
-                try
+                string title = entry.Element(ns + "title")?.Value ?? "";
+
+                // rel="alternate" を優先し、なければ最初の link を使用する
+                string url = entry.Elements(ns + "link")
+                    .FirstOrDefault(e => e.Attribute("rel")?.Value == "alternate")
+                    ?.Attribute("href")?.Value
+                    ?? entry.Element(ns + "link")?.Attribute("href")?.Value
+                    ?? "";
+
+                // summary → content の順で取得する
+                string summary = entry.Element(ns + "summary")?.Value
+                    ?? entry.Element(ns + "content")?.Value
+                    ?? "";
+
+                // published を優先し、なければ updated を使用する
+                string? dateStr = entry.Element(ns + "published")?.Value
+                    ?? entry.Element(ns + "updated")?.Value;
+
+                articles.Add(new ArticleItem
                 {
-                    using var readerExt = encodedExt.GetReader();
-                    var element = XElement.Load(readerExt);
-                    summary = element.HasElements
-                        ? string.Concat(element.Nodes())
-                        : element.Value;
-                }
-                catch { }
-            }
-
-            if (string.IsNullOrEmpty(summary) && item.Content is TextSyndicationContent textContent)
-            {
-                summary = textContent.Text;
-            }
-            else if (string.IsNullOrEmpty(summary) && item.Content is XmlSyndicationContent xmlContent)
-            {
-                try
-                {
-                    using var readerExt = xmlContent.GetReaderAtContent();
-                    var element = XElement.Load(readerExt);
-                    summary = element.HasElements
-                        ? string.Concat(element.Nodes())
-                        : element.Value;
-                }
-                catch { }
-            }
-
-            if (string.IsNullOrEmpty(summary))
-            {
-                summary = item.Summary?.Text ?? "";
-            }
-
-            if (string.IsNullOrEmpty(summary))
-            {
-                summary = $"<a href='{link}'>記事を開く</a>";
-            }
-
-            // 日付
-            DateTime pubDate =
-                item.PublishDate != default ? item.PublishDate.DateTime :
-                item.LastUpdatedTime != default ? item.LastUpdatedTime.DateTime :
-                DateTime.Now;
-
-            return new ArticleItem
-            {
-                Title = title,
-                Url = link,
-                Summary = summary,
-                Date = pubDate
-            };
-        }
-
-        // RDF解析
-        private static List<ArticleItem> ParseRdf(Stream stream, string baseUrl)
-        {
-            var list = new List<ArticleItem>();
-
-            if (stream.CanSeek)
-                stream.Position = 0;
-
-            var doc = XDocument.Load(stream);
-
-            // 名前空間に依存せず item を取得する
-            var items = doc.Descendants()
-                           .Where(e => e.Name.LocalName == "item");
-
-            foreach (var node in items)
-            {
-                // タイトル
-                string title = node.Elements()
-                    .FirstOrDefault(e => e.Name.LocalName == "title")?.Value ?? "";
-
-                // リンク
-                string rawLink = node.Elements()
-                    .FirstOrDefault(e => e.Name.LocalName == "link")?.Value ?? "";
-
-                string link = ResolveUrl(baseUrl, rawLink);
-
-                // 説明
-                string desc = node.Elements()
-                    .FirstOrDefault(e => e.Name.LocalName == "description")?.Value ?? "";
-
-                if (string.IsNullOrEmpty(desc))
-                {
-                    desc = $"<a href='{link}'>記事を開く</a>";
-                }
-
-                // 日付（dc:date対応）
-                string dateVal = node.Elements()
-                    .FirstOrDefault(e => e.Name.LocalName == "date")?.Value ?? "";
-
-                DateTime published = DateTimeOffset.TryParse(dateVal, out var parsed)
-                    ? parsed.DateTime
-                    : DateTime.Now;
-
-                list.Add(new ArticleItem
-                {
-                    Title = title,
-                    Url = link,
-                    Summary = desc,
-                    Date = published
+                    Title = title.Trim(),
+                    Url = url.Trim(),
+                    Summary = StripHtml(summary).Trim(),
+                    Date = ParseDate(dateStr),
+                    FeedTitle = feedTitle.Trim()
                 });
             }
 
-            return list;
+            return articles;
+        }
+
+        // RSS 2.0 / RSS 1.0(RDF) 形式を解析する
+        private static List<ArticleItem> ParseRss(XDocument doc)
+        {
+            XNamespace dc = "http://purl.org/dc/elements/1.1/";
+            XNamespace content = "http://purl.org/rss/1.0/modules/content/";
+
+            // RSS 1.0(RDF) と 2.0 の両方に対応するため LocalName で検索する
+            var channel = doc.Descendants().FirstOrDefault(e => e.Name.LocalName == "channel");
+            string feedTitle = channel?.Elements()
+                .FirstOrDefault(e => e.Name.LocalName == "title")?.Value ?? "";
+
+            var articles = new List<ArticleItem>();
+
+            foreach (var item in doc.Descendants().Where(e => e.Name.LocalName == "item"))
+            {
+                string title = item.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "title")?.Value ?? "";
+
+                string url = item.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "link")?.Value ?? "";
+
+                // content:encoded → description の順で取得する
+                string summary = item.Element(content + "encoded")?.Value
+                    ?? item.Elements()
+                        .FirstOrDefault(e => e.Name.LocalName == "description")?.Value
+                    ?? "";
+
+                // pubDate → dc:date の順で取得する
+                string? dateStr = item.Elements()
+                    .FirstOrDefault(e => e.Name.LocalName == "pubDate")?.Value
+                    ?? item.Element(dc + "date")?.Value;
+
+                articles.Add(new ArticleItem
+                {
+                    Title = title.Trim(),
+                    Url = url.Trim(),
+                    Summary = StripHtml(summary).Trim(),
+                    Date = ParseDate(dateStr),
+                    FeedTitle = feedTitle.Trim()
+                });
+            }
+
+            return articles;
+        }
+
+        // 日付文字列を DateTime に変換する（解析失敗時は現在時刻を返す）
+        private static DateTime ParseDate(string? dateStr)
+        {
+            if (string.IsNullOrEmpty(dateStr)) return DateTime.Now;
+
+            // ISO 8601 などの一般的な形式を試みる
+            if (DateTime.TryParse(dateStr,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var dt))
+            {
+                return dt.ToLocalTime();
+            }
+
+            // RFC 822 形式（例: Mon, 02 Jan 2006 15:04:05 +0900）を試みる
+            string[] rfc822Formats =
+            [
+                "ddd, dd MMM yyyy HH:mm:ss zzz",
+                "ddd, dd MMM yyyy HH:mm:ss 'GMT'",
+                "dd MMM yyyy HH:mm:ss zzz"
+            ];
+
+            if (DateTimeOffset.TryParseExact(
+                dateStr,
+                rfc822Formats,
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None,
+                out var dto))
+            {
+                return dto.LocalDateTime;
+            }
+
+            return DateTime.Now;
+        }
+
+        // HTMLタグを除去し、プレーンテキストを返す
+        private static string StripHtml(string html)
+        {
+            if (string.IsNullOrEmpty(html)) return "";
+            return HtmlTagRegex().Replace(html, " ")
+                .Replace("&nbsp;", " ")
+                .Replace("&amp;", "&")
+                .Replace("&lt;", "<")
+                .Replace("&gt;", ">")
+                .Replace("&quot;", "\"")
+                .Trim();
         }
     }
 }

@@ -79,6 +79,7 @@ namespace FeedGem.Services
                 });
 
             await Task.WhenAll(tasks);
+            _feedService.NotifyDataChanged();
 
             // 最後に1回だけ古い記事削除
             await _repository.DeleteOldEntriesAsync();

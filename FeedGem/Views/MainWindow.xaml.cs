@@ -54,13 +54,21 @@ namespace FeedGem.Views
             _menuBuilder = new ContextMenuBuilder(
                 _feedService,
                 _updateService,
-                LoadFeedsToTreeViewAsync,
                 LogTextBlock,
                 UpdateLastUpdateTime,
                 ImportOpmlAsync,
                 ExportOpmlAsync,
                 RefreshCurrentArticleListAsync
             );
+
+            _feedService.DataChanged += async () =>
+            {
+                await Dispatcher.InvokeAsync(async () =>
+                {
+                    await LoadFeedsToTreeViewAsync();
+                    await RefreshCurrentArticleListAsync();
+                });
+            };
 
             _backgroundTimer = new BackgroundUpdateTimer(
                 _updateService,

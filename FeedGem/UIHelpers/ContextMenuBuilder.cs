@@ -10,7 +10,6 @@ namespace FeedGem.UIHelpers
     public class ContextMenuBuilder(
         FeedService feedService,
         FeedUpdateService updateService,
-        Func<Task> reloadTree,
         TextBlock log,
         Action updateTime,
         Func<Task> importOpml,
@@ -19,7 +18,6 @@ namespace FeedGem.UIHelpers
     {
         private readonly FeedService _feedService = feedService;
         private readonly FeedUpdateService _updateService = updateService;
-        private readonly Func<Task> _reloadTree = reloadTree;
         private readonly TextBlock _log = log;
         private readonly Action _updateTime = updateTime;
         private readonly Func<Task> _importOpml = importOpml;
@@ -84,8 +82,6 @@ namespace FeedGem.UIHelpers
             markAllReadItem.Click += async (s, e) =>
             {
                 await _feedService.MarkAllAsReadAsync(feedId);
-                await _reloadTree();
-                await _refreshCurrentListView();
             };
             menu.Items.Add(markAllReadItem);
 
@@ -127,8 +123,6 @@ namespace FeedGem.UIHelpers
             markFolderReadItem.Click += async (s, e) =>
             {
                 await _feedService.MarkFolderAsReadAsync(folderId);
-                await _reloadTree();
-                await _refreshCurrentListView();
             };
             menu.Items.Add(markFolderReadItem);
 
@@ -165,8 +159,6 @@ namespace FeedGem.UIHelpers
                 }
 
                 await _feedService.DeleteFolderWithContentsAsync(folderId);
-                await _reloadTree();
-                await _refreshCurrentListView();
             };
             menu.Items.Add(deleteFolderItem);
         }
@@ -180,9 +172,7 @@ namespace FeedGem.UIHelpers
             try
             {
                 await _updateService.UpdateAllAsync();
-                await _reloadTree();
                 _updateTime();
-                await _refreshCurrentListView();
                 _log.Text = "更新が完了しました。";
             }
             catch (Exception ex)
@@ -225,7 +215,6 @@ namespace FeedGem.UIHelpers
                 }
 
                 await _feedService.CreateFolderAsync(name, parentId);
-                await _reloadTree();
             }
             catch (Exception ex)
             {
@@ -261,8 +250,6 @@ namespace FeedGem.UIHelpers
                 {
                     await _feedService.RenameFeedAsync(tag.Id, newName);
                 }
-
-                await _reloadTree();
             }
             catch (Exception ex)
             {
@@ -282,7 +269,6 @@ namespace FeedGem.UIHelpers
             }
 
             await _feedService.DeleteFeedAsync(feedId);
-            await _reloadTree();
             await _refreshCurrentListView();
         }
     }
