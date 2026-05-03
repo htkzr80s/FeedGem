@@ -224,7 +224,7 @@ namespace FeedGem.Views
                     }
                     catch (Exception ex)
                     {
-                        Debug.WriteLine($"ナビゲーション時のテーマ適用エラー: {ex.Message}");
+                        Debug.WriteLine($"Failed to set theme on navigation: {ex.Message}");
                     }     
                 };
 
@@ -388,7 +388,7 @@ namespace FeedGem.Views
         // 入力欄にマウスやタブで移動した時の処理
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            if (SearchBox.Text == "URLを入力してEnter...")
+            if (SearchBox.Text == "URLを入力")
             {
                 SearchBox.Text = ""; // ヒント文字を消す
                 SearchBox.Foreground = (Brush)FindResource("TextBrush");
@@ -415,7 +415,7 @@ namespace FeedGem.Views
         private async Task PerformUrlSubscribeAsync()
         {
             string url = SearchBox.Text.Trim();
-            if (string.IsNullOrEmpty(url) || url == "URLを入力してEnter...") return;
+            if (string.IsNullOrEmpty(url) || url == "URLを入力") return;
 
             try
             {
@@ -455,7 +455,7 @@ namespace FeedGem.Views
             }
             finally
             {
-                SearchBox.Text = "URLを入力してEnter...";
+                SearchBox.Text = "URLを入力";
                 Mouse.OverrideCursor = null;
             }
         }
@@ -500,7 +500,7 @@ namespace FeedGem.Views
         // 記事検索ボックスにフォーカスが当たった時の処理
         private void FilterBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            if (FilterBox.Text == "記事を検索...")
+            if (FilterBox.Text == "記事を検索")
             {
                 FilterBox.Text = "";
                 FilterBox.Foreground = (Brush)FindResource("TextBrush");
@@ -515,7 +515,7 @@ namespace FeedGem.Views
             if (view == null) return;
 
             string keyword = FilterBox.Text.Trim();
-            if (string.IsNullOrEmpty(keyword) || keyword == "記事を検索...")
+            if (string.IsNullOrEmpty(keyword) || keyword == "記事を検索")
             {
                 view.Filter = null; // 検索文字が空ならフィルタ解除
             }
@@ -537,7 +537,7 @@ namespace FeedGem.Views
         private void FilterClearButton_Click(object sender, RoutedEventArgs e)
         {
             FilterBox.Text = "";
-            FilterBox.Text = "記事を検索...";
+            FilterBox.Text = "記事を検索";
         }
 
         // 設定ボタンクリック
@@ -588,7 +588,7 @@ namespace FeedGem.Views
         {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                Filter = "OPMLファイル (*.opml;*.xml)|*.opml;*.xml"
+                Filter = "OPML File (*.opml;*.xml)|*.opml;*.xml"
             };
 
             if (dialog.ShowDialog() != true) return;
@@ -607,15 +607,16 @@ namespace FeedGem.Views
             }
             catch (Exception ex)
             {
-                LoggingService.Error("OPMLインポート失敗", ex);
-                MessageBox.Show($"インポート失敗: {ex.Message}");
+                LogTextBlock.Text = "OPMLのインポートに失敗しました。";
+                LoggingService.Error("Failed to import OPML", ex);
+                MessageBox.Show($"OPMLのインポートに失敗しました");
             }
         }
 
         // OPMLエクスポート
         private async Task ExportOpmlAsync()
         {
-            var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "OPMLファイル (*.opml)|*.opml", FileName = "feeds.opml" };
+            var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "OPML File (*.opml)|*.opml", FileName = "Myfeeds.opml" };
             if (dialog.ShowDialog() != true) return;
             LogTextBlock.Text = "エクスポート中...";
 
@@ -627,9 +628,9 @@ namespace FeedGem.Views
             }
             catch (Exception ex)
             {
-                LogTextBlock.Text = "エクスポートに失敗しました。";
-                LoggingService.Error("OPMLエクスポート失敗", ex);
-                MessageBox.Show($"エクスポート失敗: {ex.Message}");
+                LogTextBlock.Text = "OPMLのエクスポートに失敗しました。";
+                LoggingService.Error("Failed to export OPML", ex);
+                MessageBox.Show($"OPMLのエクスポートに失敗しました。");
             }
         }
 

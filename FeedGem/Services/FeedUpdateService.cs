@@ -40,29 +40,29 @@ namespace FeedGem.Services
                     }
                     catch (FeedNotFoundException)
                     {
-                        // --- 404 ---
+                        // --- 404：恒久的なエラーとして記録 ---
                         feed.ErrorState = FeedInfo.FeedErrorState.NotFound404;
                         feed.LastFailureTime = DateTime.Now;
-
                         LoggingService.Error($"404: {feed.Title}", new Exception("404 Not Found"));
+                    }
+                    catch (FeedFormatException ex)  // ← 追加
+                    {
+                        // --- フィード形式エラー：通信は成功しているが内容が不正 ---
+                        feed.ErrorState = FeedInfo.FeedErrorState.TemporaryFailure;
+                        feed.LastFailureTime = DateTime.Now;
+                        LoggingService.Error($"FormatError: {feed.Title}", ex);
                     }
                     catch (Exception ex)
                     {
-                        // --- 通信エラー ---
+                        // --- 通信エラー：成功実績の有無で深刻度を判定 ---
                         feed.LastFailureTime = DateTime.Now;
 
                         if (feed.LastSuccessTime != null)
                         {
                             var diff = DateTime.Now - feed.LastSuccessTime.Value;
-
-                            if (diff.TotalHours >= 24)
-                            {
-                                feed.ErrorState = FeedInfo.FeedErrorState.LongFailure;
-                            }
-                            else
-                            {
-                                feed.ErrorState = FeedInfo.FeedErrorState.TemporaryFailure;
-                            }
+                            feed.ErrorState = diff.TotalHours >= 24
+                                ? FeedInfo.FeedErrorState.LongFailure
+                                : FeedInfo.FeedErrorState.TemporaryFailure;
                         }
                         else
                         {

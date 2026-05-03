@@ -30,11 +30,17 @@ namespace FeedGem.Services
 
             // Atom 1.0 の判定
             if (root.Name.LocalName == "feed")
-                return ParseAtom(doc);
+                // タイトルとURLが両方揃っている記事のみを返す
+                return [.. ParseAtom(doc).Where(a =>
+                    !string.IsNullOrWhiteSpace(a.Title) &&
+                    !string.IsNullOrWhiteSpace(a.Url))];
 
             // RSS 2.0 / RSS 1.0(RDF) の判定
             if (root.Name.LocalName == "rss" || root.Name.LocalName == "RDF")
-                return ParseRss(doc);
+                // タイトルとURLが両方揃っている記事のみを返す
+                return [.. ParseRss(doc).Where(a =>
+                    !string.IsNullOrWhiteSpace(a.Title) &&
+                    !string.IsNullOrWhiteSpace(a.Url))];
 
             return [];
         }

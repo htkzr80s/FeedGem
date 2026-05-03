@@ -103,7 +103,7 @@ namespace FeedGem.Services
             }
             catch (Exception ex)
             {
-                LoggingService.Error("購読処理失敗", ex);
+                LoggingService.Error("Failed to subscribe", ex);
 
                 // 無効なフィードが残っていたら削除
                 if (isNew && feedId > 0)
@@ -114,7 +114,7 @@ namespace FeedGem.Services
                     }
                     catch (Exception deleteEx)
                     {
-                        LoggingService.Error("フィード削除失敗", deleteEx);
+                        LoggingService.Error("Failed to delete invalid feed", deleteEx);
                     }
                 }
 

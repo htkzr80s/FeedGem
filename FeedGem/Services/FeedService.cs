@@ -40,20 +40,21 @@ namespace FeedGem.Services
                     !mediaType.Contains("atom") &&
                     !mediaType.Contains("html"))
                 {
-                    throw new Exception("RSSではないレスポンスです");
+                    throw new FeedFormatException("Unsupported content type");
                 }
 
                 // --- Stream取得 ---
                 using var stream = await response.Content.ReadAsStreamAsync();
 
                 var articles = FeedParser.Parse(stream)
+                    .Where(a => !string.IsNullOrWhiteSpace(a.Title) && !string.IsNullOrWhiteSpace(a.Url))
                     .OrderByDescending(a => a.Date)
                     .Take(AppSettings.MaxArticleCount)
                     .ToList();
 
                 if (articles.Count == 0)
                 {
-                    throw new Exception("RSSではないレスポンスです");
+                    throw new FeedFormatException("No articles found in feed"); 
                 }
 
                 await _repository.SaveEntriesAsync(feedId, articles);
@@ -61,10 +62,6 @@ namespace FeedGem.Services
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 throw new FeedNotFoundException();
-            }
-            catch
-            {
-                throw;
             }
         }
 
@@ -135,7 +132,14 @@ namespace FeedGem.Services
         }
     }
 
+    // フィードが存在しない（HTTP 404）
     public class FeedNotFoundException : Exception
+    {
+        public FeedNotFoundException() : base("Feed not found (404).") { }
+    }
+
+    // フィードの形式が対応していない、または記事が取得できない
+    public class FeedFormatException(string message) : Exception(message)
     {
     }
 }
