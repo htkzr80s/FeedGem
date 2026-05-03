@@ -149,11 +149,12 @@ namespace FeedGem.Services
 
             // RFC 822 形式（例: Mon, 02 Jan 2006 15:04:05 +0900）を試みる
             string[] rfc822Formats =
-            [
+           [
                 "ddd, dd MMM yyyy HH:mm:ss zzz",
                 "ddd, dd MMM yyyy HH:mm:ss 'GMT'",
+                "ddd, dd MMM yyyy HH:mm:ss 'UTC'",
                 "dd MMM yyyy HH:mm:ss zzz"
-            ];
+           ];
 
             if (DateTimeOffset.TryParseExact(
                 dateStr,
@@ -163,6 +164,20 @@ namespace FeedGem.Services
                 out var dto))
             {
                 return dto.LocalDateTime;
+            }
+
+            // ・末尾が "UT" のRFC 822 非標準形式（SourceForge等）を "UTC" に補正して再試行する
+            if (dateStr.EndsWith(" UT", StringComparison.OrdinalIgnoreCase))
+            {
+                if (DateTimeOffset.TryParseExact(
+                    dateStr[..^2] + "UTC",
+                    rfc822Formats,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out var dtoUt))
+                {
+                    return dtoUt.LocalDateTime;
+                }
             }
 
             return DateTime.Now;
