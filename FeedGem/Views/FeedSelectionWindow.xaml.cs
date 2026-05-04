@@ -1,5 +1,6 @@
 ﻿using FeedGem.Models;
 using System.Windows;
+using static FeedGem.Services.LocalizationService;
 
 namespace FeedGem.Views
 {
@@ -15,6 +16,7 @@ namespace FeedGem.Views
         {
             InitializeComponent();
             SetupWindowIcon();
+            ApplyTranslations();
 
             // まず全て未選択にする
             foreach (var c in candidates)
@@ -56,6 +58,11 @@ namespace FeedGem.Views
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
             this.DialogResult = false; // ダイアログの結果をfalseに設定して閉じる
+        }
+
+        private void ApplyTranslations()
+        {
+            SelectFeedText.Text = T("OtherWindow.Dlg.Select.Feed");
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.Windows;
+using static FeedGem.Services.LocalizationService;
 
 namespace FeedGem.Views
 {
@@ -10,6 +11,8 @@ namespace FeedGem.Views
         public SettingsWindow()
         {
             InitializeComponent();
+
+            ApplyTranslations();
 
             // 現在の設定を反映
             var config = App.LoadConfig();
@@ -67,6 +70,13 @@ namespace FeedGem.Views
 
             DialogResult = false;
             Close();
+        }
+
+        private void ApplyTranslations()
+        {
+            ThemeTextBlock.Text = T("OtherWindow.Settings.Text.Theme");
+            RadioAuto.Content = T("OtherWindow.Settings.Radio.ThemeAuto");
+            LangTextBlock.Text = T("OtherWindow.Settings.Text.Language");
         }
     }
 }

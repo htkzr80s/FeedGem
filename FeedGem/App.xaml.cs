@@ -1,7 +1,6 @@
 ﻿using FeedGem.Core;
 using FeedGem.Services;
 using FeedGem.Views;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
@@ -101,7 +100,7 @@ namespace FeedGem
             if (hMonitor == IntPtr.Zero)
             {
                 // プライマリモニタの作業領域中央に復帰
-                var primary = System.Windows.SystemParameters.WorkArea;
+                var primary = SystemParameters.WorkArea;
 
                 window.Left = primary.Left + (primary.Width - window.Width) / 2;
                 window.Top = primary.Top + (primary.Height - window.Height) / 2;
@@ -109,22 +108,32 @@ namespace FeedGem
             }
         }
 
-        // 埋め込みリソースから高DPI向けのアイコンフレームを取得する
+        // WPFのリソースシステムから高DPI向けのアイコンフレームを取得する
         public static ImageSource? GetHighDpiIcon()
         {
-            var assembly = Assembly.GetExecutingAssembly();
+            // pack URIスキームを使用してプロジェクト内のリソースを指定する
+            var uri = new Uri("pack://application:,,,/Resources/Icons/app.ico");
 
-            // ストリームからアイコンリソースを読み込み
-            using var stream = assembly.GetManifestResourceStream("FeedGem.Resources.app.ico");
-            if (stream == null) return null;
+            try
+            {
+                // アプリケーションのリソースからストリームを取得
+                var streamInfo = GetResourceStream(uri);
+                if (streamInfo == null) return null;
 
-            // アイコンのデコーダーを作成し、全フレームを展開
-            var decoder = new IconBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default);
+                // 取得したストリームからアイコンの全フレームをデコードする
+                using var stream = streamInfo.Stream;
+                var decoder = new IconBitmapDecoder(stream, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.Default);
 
-            // 最も解像度の高いフレームを取得し、高DPI環境でのぼやけを防止
-            var highResFrame = decoder.Frames.OrderByDescending(f => f.PixelWidth).FirstOrDefault();
+                // 登録されているフレームの中から最も解像度（幅）が高いものを選択し、スケーリングによるボケを防ぐ
+                var highResFrame = decoder.Frames.OrderByDescending(f => f.PixelWidth).FirstOrDefault();
 
-            return highResFrame;
+                return highResFrame;
+            }
+            catch (Exception)
+            {
+                // リソースが見つからない、または読み込み失敗時はnullを返す
+                return null;
+            }
         }
 
         // テーマを画面に反映させるだけの処理（保存はしない）

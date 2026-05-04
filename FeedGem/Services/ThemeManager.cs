@@ -18,9 +18,9 @@ namespace FeedGem.Services
 
             string uriString = themeName switch
             {
-                "Dark" => "pack://application:,,,/Themes/DarkTheme.xaml",
-                "Light" => "pack://application:,,,/Themes/LightTheme.xaml",
-                _ => "pack://application:,,,/Themes/LightTheme.xaml"
+                "Dark" => "pack://application:,,,/Resources/Themes/DarkTheme.xaml",
+                "Light" => "pack://application:,,,/Resources/Themes/LightTheme.xaml",
+                _ => "pack://application:,,,/Resources/Themes/LightTheme.xaml"
             };
 
             var dict = new ResourceDictionary

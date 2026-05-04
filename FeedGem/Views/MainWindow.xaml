@@ -25,15 +25,15 @@
             <tb:TaskbarIcon
                 x:Name="TaskbarIcon"
                 ToolTipText="FeedGem"
-                IconSource="pack://application:,,,/Resources/app.ico"
+                IconSource="pack://application:,,,/Resources/Icons/app.ico"
                 MenuActivation="RightClick"
                 Visibility="Visible">
                 <tb:TaskbarIcon.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="表示" Click="TrayMenu_Show_Click" />
-                        <MenuItem Header="最小化" Click="TrayMenu_Minimize_Click" />
+                        <MenuItem x:Name="TraymenuShow" Header="表示" Click="TrayMenu_Show_Click" />
+                        <MenuItem x:Name="TraymenuMini" Header="最小化" Click="TrayMenu_Minimize_Click" />
                         <Separator />
-                        <MenuItem Header="終了" Click="TrayMenu_Exit_Click" />
+                        <MenuItem x:Name="TraymenuExit" Header="終了" Click="TrayMenu_Exit_Click" />
                     </ContextMenu>
                 </tb:TaskbarIcon.ContextMenu>
             </tb:TaskbarIcon>
@@ -58,14 +58,14 @@
 
                 <ListView.ContextMenu>
                     <ContextMenu>
-                        <MenuItem Header="ブラウザで開く" Click="OpenBrowserButton_Click">
+                        <MenuItem x:Name="CtxArticleOpenBrowser" Header="ブラウザで開く" Click="OpenBrowserButton_Click">
                             <MenuItem.Icon>
                                 <TextBlock Text="🌐"/>
                             </MenuItem.Icon>
                         </MenuItem>
                         <Separator />
-                        <MenuItem Header="記事タイトルをコピー" Click="CopyTitle_Click" />
-                        <MenuItem Header="URLをコピー" Click="CopyUrl_Click" />
+                        <MenuItem x:Name="CtxArticleCopyTitle" Header="記事タイトルをコピー" Click="CopyTitle_Click" />
+                        <MenuItem x:Name="CtxArticleCopyUrl" Header="URLをコピー" Click="CopyUrl_Click" />
                     </ContextMenu>
                 </ListView.ContextMenu>
 
@@ -174,7 +174,7 @@
                             FontSize="14"
                             GotFocus="SearchBox_GotFocus" 
                             KeyDown="SearchBox_KeyDown"/>
-                    <Button Content="⏎" Width="35" Margin="2,0,0,0" Click="UrlEnterButton_Click" ToolTip="購読を実行" FontSize="14"/>
+                    <Button x:Name="UrlEnterButton" Content="⏎" Width="35" Margin="2,0,0,0" Click="UrlEnterButton_Click" ToolTip="購読を実行" FontSize="14"/>
                 </StackPanel>
             </StatusBarItem>
 
@@ -197,7 +197,7 @@
                 <TextBlock x:Name="LastUpdateTextBlock" Text="LastUpdate: --/--/-- --:--" Margin="0,0,5,0" FontSize="14"/>
             </StatusBarItem>
             <StatusBarItem Grid.Column="4">
-                <Button Content="⚙️" Width="35" Margin="2,0,0,0"
+                <Button x:Name="SettingsButton" Content="⚙️" Width="35" Margin="2,0,0,0"
                             Click="SettingsButton_Click" ToolTip="設定"/>
             </StatusBarItem>
         </StatusBar>

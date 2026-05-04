@@ -30,9 +30,9 @@ namespace FeedGem.Services
 
         private void LoadIcons()
         {
-            _normalTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/app.ico"));
-            _unreadTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/unread.ico"));
-            _errorTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/error.ico"));
+            _normalTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/Icons/app.ico"));
+            _unreadTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/Icons/unread.ico"));
+            _errorTrayIcon = new BitmapImage(new Uri("pack://application:,,,/Resources/Icons/error.ico"));
 
             _taskbarIcon?.IconSource = _normalTrayIcon;
         }

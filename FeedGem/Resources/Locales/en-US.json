@@ -1,0 +1,87 @@
+{
+  "_metadata": {
+    "language": "English",
+    "locale": "en-US",
+    "author": "FeedGem",
+    "version": "1.0.0",
+    "updated_at": "2026-05-04"
+  },
+  "MainWindow": {
+    "Bar.Box.Filter": "Search articles",
+    "Bar.Box.Url": "Enter URL",
+    "Bar.LastupdatePrefix": "Last updated: {0}",
+    "Btn.Open.Browser": "Open in browser",
+    "Msg.Article.LoadFailed": "Failed to load article.: ",
+    "Msg.Opml.ExportFailed": "Failed to export OPML.",
+    "Msg.Opml.ImportFailed": "Failed to import OPML.",
+    "Msg.Subscribe.AlreadySubscribed": "Already subscribed.",
+    "Msg.Subscribe.Error": "An error occurred while subscribing.",
+    "Msg.Subscribe.NoCandidates": "No feeds found.",
+    "Msg.Subscribe.SkippedOrEmpty": "Unsupported URL: The feed contains no valid content.",
+    "Msg.Subscribe.TooManyCandidates": "Discovery aborted: Too many potential feed URLs found.",
+    "Tip.Btn.FilterClear": "Clear search",
+    "Tip.Btn.Settings": "Settings",
+    "Tip.Btn.Subscribe": "Subscribe",
+    "Tray.Menu.Show": "Show",
+    "Tray.Menu.Minimize": "Minimize",
+    "Tray.Menu.Exit": "Exit"
+  },
+  "TreeView": {
+    "CtxM.Copy.FeedUrl": "Copy URL",
+    "CtxM.Create.Folder": "Create folder",
+    "CtxM.Delete.Feed": "Delete feed",
+    "CtxM.Delete.Folder": "Delete folder",
+    "CtxM.MarkRead.AllItems": "Mark all as read",
+    "CtxM.Rename.Item": "Rename",
+    "CtxM.Opml.Import": "Import OPML",
+    "CtxM.Opml.Export": "Export OPML",
+    "CtxM.UpdateAll": "Update all",
+    "Dlg.Input.Name": "New name",
+    "Msg.Confirm": "Confirm",
+    "Msg.Create.Folder": "Enter folder name",
+    "Msg.Delete.Feed": "Delete this feed?",
+    "Msg.Delete.Folder": "Are you sure you want to delete all feeds and articles in this folder?",
+    "Msg.Error": "An unexpected error occurred",
+    "Tip.Failure.Persistent": "Failed to update for 24+ hours",
+    "Tip.Failure.Transient": "Temporary update error",
+    "Tip.NotFound": "404: Feed not found (skipping update)"
+  },
+  "ArticleView": {
+    "CtxM.Copy.ArticleTitle": "Copy Title",
+    "CtxM.Copy.ArticleUrl": "Copy URL",
+    "CtxM.Open.Browser": "Open in browser"
+  },
+  "OtherWindow": {
+    "Dlg.Select.Feed": "Multiple feeds found. Select feed to add.",
+    "Settings.Radio.ThemeAuto": "Auto (Follow system settings)",
+    "Settings.Text.Theme": "Theme",
+    "Settings.Text.Language": "Language"
+  },
+  "PreviewHtml": {
+    "Preview.None": "(No preview available. Please check in your browser.)"
+  },
+  "LogText": {
+    "Log.App.Ready": "Ready.",
+    "Log.App.LaunchError": "Could not initialize all components. Some features may be limited.",
+    "Log.Copy.FeedUrl": "URL copied: {0}",
+    "Log.Copy.ArticleTitle": "Title copied.",
+    "Log.Copy.ArticleUrl": "URL copied.",
+    "Log.UpdateAll": "Updating articles...",
+    "Log.UpdateCompleted": "Update completed.",
+    "Log.UpdateError": "An error occurred during update.",
+    "Log.Discovery.Feed": "Searching for feeds...",
+    "Log.Opml.Exporting": "Exporting...",
+    "Log.Opml.Exported": "Export completed.",
+    "Log.Opml.Export.Failed": "Failed to export OPML.",
+    "Log.Opml.Importing": "Importing...",
+    "Log.Opml.Import.Failed": "Failed to import OPML.",
+    "Log.Opml.Import.Result": "Attempted: {0} / Registered: {1} / Skipped: {2}",
+    "Log.Subscribe.AlreadySubscribed": "Already subscribed.",
+    "Log.Subscribe.Cancelled": "Subscription cancelled.",
+    "Log.Subscribe.Error": "An error occurred while subscribing.",
+    "Log.Subscribe.NoCandidates": "No feeds found.",
+    "Log.Subscribe.SkippedOrEmpty": "Unsupported URL: The feed contains no valid content.",
+    "Log.Subscribe.Success": "Feed added.",
+    "Log.Subscribe.TooManyCandidates": "Discovery aborted: Too many potential feed URLs found."
+  }
+}

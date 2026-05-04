@@ -1,0 +1,87 @@
+{
+  "_metadata": {
+    "language": "日本語",
+    "locale": "ja-JP",
+    "author": "FeedGem",
+    "version": "1.0.0",
+    "updated_at": "2026-05-03"
+  },
+  "MainWindow": {
+    "Bar.Box.Filter": "記事を検索",
+    "Bar.Box.Url": "URLを入力",
+    "Bar.LastupdatePrefix": "最終更新:{0}",
+    "Btn.Open.Browser": "ブラウザで開く",
+    "Msg.Article.LoadFailed": "記事の読み込みに失敗しました: ",
+    "Msg.Opml.ExportFailed": "OPMLのエクスポートに失敗しました。",
+    "Msg.Opml.ImportFailed": "OPMLのインポートに失敗しました。",
+    "Msg.Subscribe.AlreadySubscribed": "既に登録済みのため中止しました。",
+    "Msg.Subscribe.Error": "購読中にエラーが発生しました。",
+    "Msg.Subscribe.NoCandidates": "フィードが見つかりませんでした。",
+    "Msg.Subscribe.SkippedOrEmpty": "未対応のURLのため購読を中止しました。",
+    "Msg.Subscribe.TooManyCandidates": "候補が多すぎるため処理を中止しました。",
+    "Tip.Btn.FilterClear": "検索をクリア",
+    "Tip.Btn.Settings": "設定",
+    "Tip.Btn.Subscribe": "購読を実行",
+    "Tray.Menu.Show": "表示",
+    "Tray.Menu.Minimize": "最小化",
+    "Tray.Menu.Exit": "終了"
+  },
+  "TreeView": {
+    "CtxM.Copy.FeedUrl": "URLをコピー",
+    "CtxM.Create.Folder": "フォルダを作成",
+    "CtxM.Delete.Feed": "フィードを削除",
+    "CtxM.Delete.Folder": "フォルダを削除",
+    "CtxM.MarkRead.AllItems": "すべて既読にする",
+    "CtxM.Rename.Item": "名前を変更",
+    "CtxM.Opml.Import": "OPMLをインポート",
+    "CtxM.Opml.Export": "OPMLをエクスポート",
+    "CtxM.UpdateAll": "すべて更新する",
+    "Dlg.Input.Name": "新しい名前",
+    "Msg.Confirm": "確認",
+    "Msg.Create.Folder": "フォルダ名を入力してください",
+    "Msg.Delete.Feed": "削除しますか？",
+    "Msg.Delete.Folder": "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
+    "Msg.Error": "予期せぬエラーが発生しました",
+    "Tip.Failure.Persistent": "24時間以上更新に失敗しています",
+    "Tip.Failure.Transient": "一時的な更新エラーが発生しています",
+    "Tip.NotFound": "404: フィードが見つかりません（更新をスキップ中）"
+  },
+  "ArticleView": {
+    "CtxM.Copy.ArticleTitle": "記事タイトルをコピー",
+    "CtxM.Copy.ArticleUrl": "URLをコピー",
+    "CtxM.Open.Browser": "ブラウザで開く"
+  },
+  "OtherWindow": {
+    "Dlg.Select.Feed": "複数のフィードが見つかりました。追加するものを選択してください。",
+    "Settings.Radio.ThemeAuto": "Auto（システム設定に従う）",
+    "Settings.Text.Theme": "テーマ",
+    "Settings.Text.Language": "言語"
+  },
+  "PreviewHtml": {
+    "Preview.None": "（プレビューを表示できる内容がありません。ブラウザで確認してください。）"
+  },
+  "LogText": {
+    "Log.App.Ready": "準備が完了しました。",
+    "Log.App.LaunchError": "アプリの起動に失敗しました。一部機能が制限されます。",  
+    "Log.Copy.FeedUrl": "URLをコピーしました: {0}",
+    "Log.Copy.ArticleTitle": "タイトルをコピーしました。",
+    "Log.Copy.ArticleUrl": "URLをコピーしました。",
+    "Log.UpdateAll": "記事を更新中...",
+    "Log.UpdateCompleted": "更新が完了しました。",
+    "Log.UpdateError": "更新中にエラーが発生しました。",
+    "Log.Discovery.Feed": "フィードを探索中...",
+    "Log.Opml.Exporting": "エクスポート中...",
+    "Log.Opml.Exported": "エクスポートが完了しました。",
+    "Log.Opml.Export.Failed": "OPMLのエクスポートに失敗しました。",
+    "Log.Opml.Importing": "インポート中...",
+    "Log.Opml.Import.Failed": "OPMLのインポートに失敗しました。",
+    "Log.Opml.Import.Result": "試行: {0} / 登録: {1} / スキップ: {2}",
+    "Log.Subscribe.AlreadySubscribed": "既に登録済みのため中止しました。",
+    "Log.Subscribe.Cancelled": "購読を中止しました。",
+    "Log.Subscribe.Error": "購読中にエラーが発生しました。",
+    "Log.Subscribe.NoCandidates": "フィードが見つかりませんでした。",
+    "Log.Subscribe.SkippedOrEmpty": "未対応のURLのため購読を中止しました。",
+    "Log.Subscribe.Success": "フィードを追加しました。",
+    "Log.Subscribe.TooManyCandidates": "購読URLが多すぎるため処理を中止しました。"
+  }
+}

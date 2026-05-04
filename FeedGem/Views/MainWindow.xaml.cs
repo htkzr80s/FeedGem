@@ -11,6 +11,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
+using static FeedGem.Services.LocalizationService;
 
 namespace FeedGem.Views
 {
@@ -29,7 +30,6 @@ namespace FeedGem.Views
         private readonly UrlSubscriptionService _subscriptionService;
         private readonly BackgroundUpdateTimer _backgroundTimer;
         private long? _currentSelectedFeedId;
-        private TreeNodeType? _currentSelectedType;
         private readonly TrayIconManager _trayManager;
         private readonly UnreadCountService _unreadCountService;
 
@@ -69,10 +69,19 @@ namespace FeedGem.Views
                 });
             };
 
+            // 更新完了イベントに、UIを更新するメソッドを紐付ける
+            _updateService.AllUpdatesCompleted += (s, e) => 
+            {
+                // UIの更新はUIスレッドで行う必要があるため、Dispatcherを介する
+                Dispatcher.Invoke(() => 
+                {
+                    UpdateLastUpdateTime();
+                });
+            };
+
             _backgroundTimer = new BackgroundUpdateTimer(
                 _updateService,
-                () => LoadFeedsToTreeViewAsync(),  
-                UpdateLastUpdateTime,
+                async () => await LoadFeedsToTreeViewAsync(),
                 this.Dispatcher
             );
 
@@ -108,6 +117,7 @@ namespace FeedGem.Views
             App.EnsureWindowOnScreen(this);
 
             SetupWindowIcon();
+            ApplyTranslations();
         }
 
         // ユーザーデータフォルダを確認し、データベースのフルパスを返す
@@ -140,14 +150,13 @@ namespace FeedGem.Views
 
                 // 起動時にデータを画面に反映させる
                 await LoadFeedsToTreeViewAsync();
-                await RefreshTreeUnreadDisplay();
+                await _unreadCountService.UpdateAllTreeViewUnreadCountsAsync(FeedTreeView.Items);
 
                 // スケルトン（ダミー項目）を消去する
                 currentArticles.Clear();
 
-                // トレイアイコンと最終更新日時を更新
+                // トレイアイコンを更新
                 await _trayManager.UpdateIconAsync();
-                UpdateLastUpdateTime();
 
                 // バックグラウンドでの更新処理を開始
                 _ = _updateService.UpdateAllAsync();
@@ -181,6 +190,23 @@ namespace FeedGem.Views
                     IsRead = true // 未読バッジが出ないようにしておく
                 });
             }
+        }
+
+        // 翻訳辞書の内容を画面上の要素に適用するメソッド
+        private void ApplyTranslations()
+        {
+            TraymenuShow.Header = T("MainWindow.Tray.Menu.Show");
+            TraymenuMini.Header = T("MainWindow.Tray.Menu.Minimize");
+            TraymenuExit.Header = T("MainWindow.Tray.Menu.Exit");
+            CtxArticleOpenBrowser.Header = T("ArticleView.CtxM.Open.Browser");
+            CtxArticleCopyTitle.Header = T("ArticleView.CtxM.Copy.ArticleTitle");
+            CtxArticleCopyUrl.Header = T("ArticleView.CtxM.Copy.ArticleUrl");
+            OpenBrowserButton.Content = T("MainWindow.Btn.Open.Browser");
+            SearchBox.Text = T("MainWindow.Bar.Box.Url");
+            UrlEnterButton.ToolTip = T("MainWindow.Tip.Btn.Subscribe");
+            FilterBox.Text = T("MainWindow.Bar.Box.Filter");
+            FilterClearButton.ToolTip = T("MainWindow.Tip.Btn.FilterClear");
+            SettingsButton.ToolTip = T("MainWindow.Tip.Btn.Settings");
         }
 
         // WebView2の初期化と、新規ページ読み込み時のスタイル自動適用を行う
@@ -359,7 +385,7 @@ namespace FeedGem.Views
                 {
                     await _feedService.MarkArticleAsReadAsync(selectedArticle);
                     await _trayManager.UpdateIconAsync();
-                    await LoadFeedsToTreeViewAsync();
+                    await _unreadCountService.UpdateAllTreeViewUnreadCountsAsync(FeedTreeView.Items);
                 }
 
                 // ヘルパークラスを使ってHTMLを生成する
@@ -756,7 +782,6 @@ namespace FeedGem.Views
                 {
                     e.Handled = true;
                     _currentSelectedFeedId = targetId;
-                    _currentSelectedType = type;
 
                     await LoadEntriesToListViewAsync(targetId);
                 };
@@ -790,7 +815,7 @@ namespace FeedGem.Views
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"記事の読み込みに失敗しました: {ex.Message}", "表示エラー");
+                MessageBox.Show($"記事の読み込みに失敗しました: {ex.Message}", "Load Error");
             }
         }
 
@@ -801,13 +826,6 @@ namespace FeedGem.Views
             {
                 await LoadEntriesToListViewAsync(_currentSelectedFeedId.Value);
             }
-        }
-
-        // 未読数更新
-        private async Task RefreshTreeUnreadDisplay()
-        {
-            // ツリービューのルート項目（Items）を渡して一括更新を実行
-            await _unreadCountService.UpdateAllTreeViewUnreadCountsAsync(FeedTreeView.Items);
         }
     }
 }

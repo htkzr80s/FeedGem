@@ -7,6 +7,7 @@ namespace FeedGem.Services
     {
         private readonly FeedRepository _repository = repository;
         private readonly FeedService _feedService = feedService;
+        public event EventHandler? AllUpdatesCompleted;
 
         // 全フィード更新（UI・右クリック・定期処理すべてここに集約）
         public async Task UpdateAllAsync()
@@ -83,6 +84,8 @@ namespace FeedGem.Services
 
             // 最後に1回だけ古い記事削除
             await _repository.DeleteOldEntriesAsync();
+
+            OnAllUpdatesCompleted();
         }
 
         // 単体更新（将来UIから使える）
@@ -90,6 +93,13 @@ namespace FeedGem.Services
         {
             await _feedService.FetchEntriesAsync(feedId, url);
             await _repository.DeleteOldEntriesAsync();
+        }
+
+        // イベント発行用のヘルパーメソッド
+        protected virtual void OnAllUpdatesCompleted()
+        {
+            // UIスレッドで実行されるように配慮が必要な場合もあるが、まずはシンプルに発行
+            AllUpdatesCompleted?.Invoke(this, EventArgs.Empty);
         }
     }
 }
