@@ -4,39 +4,45 @@ namespace FeedGem.Services
 {
     public static class WebViewThemeService
     {
-        // テーマに応じたCSSを生成
+        // テーマ設定に応じて適用するCSS文字列を取得する
         private static string GetCss(string theme, bool simple = false)
         {
-            if (theme == "Dark")
+            // ダークモードかどうかの判定
+            bool isDark = theme == "Dark";
+
+            // テーマに基づいた基本色の定義
+            string bgColor = isDark ? "#2D2D30" : "#FFFFFF"; // 背景色
+            string fgColor = isDark ? "#E8E8E8" : "#000000"; // 文字色
+            string linkColor = isDark ? "#569CE6" : "#0066CC"; // リンク色
+            string borderColor = isDark ? "#3F3F46" : "#E0E0E0"; // 境界線（h2の下線など）
+
+            // 簡易適用モード（bodyのみ）か、全要素への強制適用かを分岐
+            if (simple)
             {
-                return simple
-                    ? @"
-                        body {
-                            color: #E8E8E8 !important;
-                            background-color: #2D2D30 !important;
-                        }"
-                    : @"
-                        body, body * {
-                            color: #E8E8E8 !important;
-                            background-color: #2D2D30 !important;
-                        }
-                        a {
-                            color: #569CE6 !important;
-                        }";
+                // bodyタグに対して背景色と文字色を適用
+                return $@"
+                    body {{
+                        color: {fgColor} !important;
+                        background-color: {bgColor} !important;
+                    }}";
             }
             else
             {
-                return simple
-                    ? @"
-                        body {
-                            color: #000000 !important;
-                            background-color: #FFFFFF !important;
-                        }"
-                    : @"
-                        body, body * {
-                            color: #000000 !important;
-                            background-color: #FFFFFF !important;
-                        }";
+                // 全ての要素に対して色を強制し、個別のタグやクラスも定義
+                return $@"
+                    body, body * {{
+                        color: {fgColor} !important;
+                        background-color: {bgColor} !important;
+                    }}
+                    a {{
+                        color: {linkColor} !important;
+                    }}
+                    h2 {{
+                        border-bottom-color: {borderColor} !important;
+                    }}
+                    .empty {{
+                        color: {(isDark ? "#999999" : "#666666")} !important;
+                    }}";
             }
         }
 
