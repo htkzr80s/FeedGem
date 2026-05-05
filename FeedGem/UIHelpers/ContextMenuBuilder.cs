@@ -130,9 +130,13 @@ namespace FeedGem.UIHelpers
                 else
                 {
                     // フィードの場合は常に確認を行う
-                    if (MessageBox.Show(T("TreeView.Msg.Delete.Feed"), T("TreeView.Msg.Confirm"),
-                            MessageBoxButton.YesNo) != MessageBoxResult.Yes)
-                        return;
+                    if (MessageBox.Show(
+                            T("TreeView.Msg.Delete.Feed"),
+                            T("TreeView.Msg.Confirm"),
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question
+                         )!= MessageBoxResult.Yes)
+                    return;
                 }
 
                 if (Application.Current.MainWindow is MainWindow main)
@@ -237,7 +241,8 @@ namespace FeedGem.UIHelpers
             }
             catch (Exception ex)
             {
-                MessageBox.Show(TF("TreeView.Msg.Error", ex.Message), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(TF("TreeView.Msg.Error", ex.Message),
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

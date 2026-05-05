@@ -11,7 +11,7 @@
     "Bar.Box.Url": "Enter URL",
     "Bar.LastupdatePrefix": "Last updated: {0}",
     "Btn.Open.Browser": "Open in browser",
-    "Msg.Article.LoadFailed": "Failed to load article.: ",
+    "Msg.Article.LoadFailed": "Failed to load article.: {0}",
     "Msg.Opml.ExportFailed": "Failed to export OPML.",
     "Msg.Opml.ImportFailed": "Failed to import OPML.",
     "Msg.Subscribe.AlreadySubscribed": "Already subscribed.",

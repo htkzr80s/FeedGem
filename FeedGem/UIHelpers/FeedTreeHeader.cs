@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using static FeedGem.Services.LocalizationService;
 
 namespace FeedGem.UIHelpers
 {
@@ -131,9 +132,9 @@ namespace FeedGem.UIHelpers
             {
                 string tooltip = errorState switch
                 {
-                    FeedInfo.FeedErrorState.NotFound404 => "404: フィードが見つかりません（更新をスキップ中）",
-                    FeedInfo.FeedErrorState.LongFailure => "24時間以上更新に失敗しています",
-                    _ => "一時的な更新エラーが発生しています"
+                    FeedInfo.FeedErrorState.NotFound404 => T("TreeView.Tip.NotFound"),
+                    FeedInfo.FeedErrorState.LongFailure => T("TreeView.Tip.Failure.Persistent"),
+                    _ => T("TreeView.Tip.Failure.Transient")
                 };
 
                 var warningIcon = new TextBlock

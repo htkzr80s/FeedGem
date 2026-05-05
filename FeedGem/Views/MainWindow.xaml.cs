@@ -167,11 +167,11 @@ namespace FeedGem.Views
                 // WebView2の初期化処理を非同期で開始
                 _ = InitializeWebViewAsync();
 
-                LogTextBlock.Text = "準備が完了しました。";
+                LogTextBlock.Text = T("LogText.Log.App.Ready");
             }
             catch (Exception)
             {
-                LogTextBlock.Text = "アプリの起動に失敗しました。一部機能が制限されます。";
+                LogTextBlock.Text = T("LogText.Log.App.LaunchError");
             }
         }
 
@@ -414,7 +414,7 @@ namespace FeedGem.Views
         // 入力欄にマウスやタブで移動した時の処理
         private void SearchBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            if (SearchBox.Text == "URLを入力")
+            if (SearchBox.Text == T("MainWindow.Bar.Box.Url"))
             {
                 SearchBox.Text = ""; // ヒント文字を消す
                 SearchBox.Foreground = (Brush)FindResource("TextBrush");
@@ -441,12 +441,12 @@ namespace FeedGem.Views
         private async Task PerformUrlSubscribeAsync()
         {
             string url = SearchBox.Text.Trim();
-            if (string.IsNullOrEmpty(url) || url == "URLを入力") return;
+            if (string.IsNullOrEmpty(url) || url == T("MainWindow.Bar.Box.Url")) return;
 
             try
             {
                 Mouse.OverrideCursor = Cursors.Wait;
-                LogTextBlock.Text = "フィードを探索中...";
+                LogTextBlock.Text = T("LogText.Log.Discovery.Feed");
 
                 var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
 
@@ -472,7 +472,7 @@ namespace FeedGem.Views
                     }
                     else
                     {
-                        LogTextBlock.Text = "購読を中止しました。";
+                        LogTextBlock.Text = T("LogText.Log.Subscribe.Cancelled");
                         return;
                     }
                 }
@@ -481,7 +481,7 @@ namespace FeedGem.Views
             }
             finally
             {
-                SearchBox.Text = "URLを入力";
+                SearchBox.Text = T("MainWindow.Bar.Box.Url");
                 Mouse.OverrideCursor = null;
             }
         }
@@ -492,33 +492,38 @@ namespace FeedGem.Views
             switch (result)
             {
                 case SubscribeResult.Success:
-                    LogTextBlock.Text = "フィードを追加しました。";
+                    LogTextBlock.Text = T("LogText.Log.Subscribe.Success");
                     await LoadFeedsToTreeViewAsync();
                     break;
 
                 case SubscribeResult.AlreadySubscribed:
-                    LogTextBlock.Text = "既に登録済みのため中止しました。";
-                    MessageBox.Show("既に登録済みです。");
+                    LogTextBlock.Text = T("LogText.Log.Subscribe.AlreadySubscribed");
+                    MessageBox.Show(T("MainWindow.Msg.Subscribe.AlreadySubscribed"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     break;
 
                 case SubscribeResult.SkippedOrEmpty:
-                    LogTextBlock.Text = "未対応のURLのため購読を中止しました。";
-                    MessageBox.Show("未対応のURLのため購読を中止しました。");
+                    LogTextBlock.Text = T("LogText.Log.Subscribe.SkippedOrEmpty");
+                    MessageBox.Show(T("MainWindow.Msg.Subscribe.SkippedOrEmpty"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     break;
 
                 case SubscribeResult.Error:
-                    LogTextBlock.Text = "エラー (未対応のURL等)";
-                    MessageBox.Show("エラーで登録できません (未対応のURL等)");
+                    LogTextBlock.Text = T("LogText.Log.Subscribe.Error");
+                    MessageBox.Show(T("MainWindow.Msg.Subscribe.Error"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     break;
 
                 case SubscribeResult.NoCandidates:
-                    LogTextBlock.Text = "フィードが見つかりませんでした。";
-                    MessageBox.Show("フィードが見つかりませんでした。");
+                    LogTextBlock.Text = T("LogText.Log.Subscribe.NoCandidates");
+                    MessageBox.Show(T("MainWindow.Msg.Subscribe.NoCandidates"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     break;
 
                 case SubscribeResult.TooManyCandidates:
-                    LogTextBlock.Text = "購読URLが多すぎるため処理を中止しました。";
-                    MessageBox.Show("購読URLが多すぎるため処理を中止しました。");
+                    LogTextBlock.Text = T("LogText.Log.Subscribe.TooManyCandidates");
+                    MessageBox.Show(T("MainWindow.Msg.Subscribe.TooManyCandidates"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     break;
             }
         }
@@ -526,7 +531,7 @@ namespace FeedGem.Views
         // 記事検索ボックスにフォーカスが当たった時の処理
         private void FilterBox_GotFocus(object sender, RoutedEventArgs e)
         {
-            if (FilterBox.Text == "記事を検索")
+            if (FilterBox.Text == T("MainWindow.Bar.Box.Filter"))
             {
                 FilterBox.Text = "";
                 FilterBox.Foreground = (Brush)FindResource("TextBrush");
@@ -541,7 +546,7 @@ namespace FeedGem.Views
             if (view == null) return;
 
             string keyword = FilterBox.Text.Trim();
-            if (string.IsNullOrEmpty(keyword) || keyword == "記事を検索")
+            if (string.IsNullOrEmpty(keyword) || keyword == T("MainWindow.Bar.Box.Filter"))
             {
                 view.Filter = null; // 検索文字が空ならフィルタ解除
             }
@@ -563,7 +568,7 @@ namespace FeedGem.Views
         private void FilterClearButton_Click(object sender, RoutedEventArgs e)
         {
             FilterBox.Text = "";
-            FilterBox.Text = "記事を検索";
+            FilterBox.Text = T("MainWindow.Bar.Box.Filter");
         }
 
         // 設定ボタンクリック
@@ -619,7 +624,7 @@ namespace FeedGem.Views
 
             if (dialog.ShowDialog() != true) return;
 
-            LogTextBlock.Text = "インポート中...";
+            LogTextBlock.Text = T("LogText.Log.Opml.Importing");
 
             try
             {
@@ -627,15 +632,16 @@ namespace FeedGem.Views
 
                 // ・結果表示
                 LogTextBlock.Text =
-                    $"試行: {total} / 登録: {added} / スキップ: {skipped}";
+                    TF("LogText.Log.Opml.Import.Result");
 
                 await LoadFeedsToTreeViewAsync();
             }
             catch (Exception ex)
             {
-                LogTextBlock.Text = "OPMLのインポートに失敗しました。";
+                LogTextBlock.Text = T("LogText.Log.Opml.Import.Failed");
                 LoggingService.Error("Failed to import OPML", ex);
-                MessageBox.Show($"OPMLのインポートに失敗しました");
+                MessageBox.Show(T("MainWindow.Msg.Opml.ImportFailed"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -644,19 +650,20 @@ namespace FeedGem.Views
         {
             var dialog = new Microsoft.Win32.SaveFileDialog { Filter = "OPML File (*.opml)|*.opml", FileName = "Myfeeds.opml" };
             if (dialog.ShowDialog() != true) return;
-            LogTextBlock.Text = "エクスポート中...";
+            LogTextBlock.Text = T("LogText.Log.Opml.Exporting");
 
             try
             {
                 var doc = await _opmlService.ExportAsync();
                 doc.Save(dialog.FileName);
-                LogTextBlock.Text = "エクスポートが完了しました。";
+                LogTextBlock.Text = T("LogText.Log.Opml.Exported");
             }
             catch (Exception ex)
             {
-                LogTextBlock.Text = "OPMLのエクスポートに失敗しました。";
+                LogTextBlock.Text = T("LogText.Log.Opml.Export.Failed");
                 LoggingService.Error("Failed to export OPML", ex);
-                MessageBox.Show($"OPMLのエクスポートに失敗しました。");
+                MessageBox.Show(T("MainWindow.Msg.Opml.ExportFailed"),
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -669,7 +676,7 @@ namespace FeedGem.Views
                 // タイトルをクリップボードへ送る
                 System.Windows.Clipboard.SetText(item.Title);
                 // ユーザーに状況を伝える
-                LogTextBlock.Text = "タイトルをコピーしました。";
+                LogTextBlock.Text = T("LogText.Log.Copy.ArticleTitle");
             }
         }
 
@@ -682,7 +689,7 @@ namespace FeedGem.Views
                 // URLをクリップボードへ送る
                 System.Windows.Clipboard.SetText(item.Url);
                 // ユーザーに状況を伝える
-                LogTextBlock.Text = "URLをコピーしました。";
+                LogTextBlock.Text = T("LogText.Log.Copy.ArticleUrl");
             }
         }
 
@@ -701,7 +708,8 @@ namespace FeedGem.Views
         // 最終更新日時表示を更新
         private void UpdateLastUpdateTime()
         {
-            LastUpdateTextBlock.Text = $"最終更新: {DateFormatService.Instance.FormatDate(DateTime.Now)}";
+            LastUpdateTextBlock.Text = TF("MainWindow.Bar.LastupdatePrefix",
+                DateFormatService.Instance.FormatDate(DateTime.Now));
         }
 
         // TreeViewの選択を再帰的に解除
@@ -815,7 +823,8 @@ namespace FeedGem.Views
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"記事の読み込みに失敗しました: {ex.Message}", "Load Error");
+                MessageBox.Show(TF("MainWindow.Msg.Article.LoadFailed", ex.Message),
+                    "Load Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 

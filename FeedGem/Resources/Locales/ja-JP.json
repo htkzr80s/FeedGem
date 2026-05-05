@@ -11,7 +11,7 @@
     "Bar.Box.Url": "URLを入力",
     "Bar.LastupdatePrefix": "最終更新:{0}",
     "Btn.Open.Browser": "ブラウザで開く",
-    "Msg.Article.LoadFailed": "記事の読み込みに失敗しました: ",
+    "Msg.Article.LoadFailed": "記事の読み込みに失敗しました：{0} ",
     "Msg.Opml.ExportFailed": "OPMLのエクスポートに失敗しました。",
     "Msg.Opml.ImportFailed": "OPMLのインポートに失敗しました。",
     "Msg.Subscribe.AlreadySubscribed": "既に登録済みのため中止しました。",
