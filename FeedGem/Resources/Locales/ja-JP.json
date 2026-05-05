@@ -41,7 +41,7 @@
     "Msg.Create.Folder": "フォルダ名を入力してください",
     "Msg.Delete.Feed": "削除しますか？",
     "Msg.Delete.Folder": "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
-    "Msg.Error": "予期せぬエラーが発生しました",
+    "Msg.Error": "予期せぬエラーが発生しました: {0}",
     "Tip.Failure.Persistent": "24時間以上更新に失敗しています",
     "Tip.Failure.Transient": "一時的な更新エラーが発生しています",
     "Tip.NotFound": "404: フィードが見つかりません（更新をスキップ中）"

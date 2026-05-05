@@ -4,6 +4,8 @@ using FeedGem.Views;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using static FeedGem.Services.LocalizationService;
+
 
 namespace FeedGem.UIHelpers
 {
@@ -29,22 +31,22 @@ namespace FeedGem.UIHelpers
             var tag = treeViewItem?.Tag as TreeTag;
 
             // 共通メニュー
-            var refreshItem = new MenuItem { Header = "今すぐ更新" };
+            var refreshItem = new MenuItem { Header = T("TreeView.CtxM.UpdateAll") };
             refreshItem.Click += async (s, e) => await SyncAll();
             menu.Items.Add(refreshItem);
 
-            var addFolderItem = new MenuItem { Header = "フォルダを作成..." };
+            var addFolderItem = new MenuItem { Header = T("TreeView.CtxM.Create.Folder") };
             addFolderItem.Click += async (s, e) => await AddFolder(treeViewItem);
             menu.Items.Add(addFolderItem);
 
             menu.Items.Add(new Separator());
 
             // OPML
-            var importOpmlItem = new MenuItem { Header = "OPMLをインポート..." };
+            var importOpmlItem = new MenuItem { Header = T("TreeView.CtxM.Opml.Import") };
             importOpmlItem.Click += async (s, e) => await _importOpml();
             menu.Items.Add(importOpmlItem);
 
-            var exportOpmlItem = new MenuItem { Header = "OPMLをエクスポート..." };
+            var exportOpmlItem = new MenuItem { Header = T("TreeView.CtxM.Opml.Export") };
             exportOpmlItem.Click += async (s, e) => await _exportOpml();
             menu.Items.Add(exportOpmlItem);
 
@@ -70,7 +72,7 @@ namespace FeedGem.UIHelpers
             if (treeViewItem.Tag is not TreeTag tag) return;
 
             // すべて既読にする
-            var markAllReadItem = new MenuItem { Header = "すべて既読にする" };
+            var markAllReadItem = new MenuItem { Header = T("TreeView.CtxM.MarkRead.AllItems") };
             markAllReadItem.Click += async (s, e) =>
             {
                 await _feedService.MarkAllAsReadAsync(id);
@@ -78,20 +80,20 @@ namespace FeedGem.UIHelpers
             menu.Items.Add(markAllReadItem);
 
             // 名前を変更する
-            var renameItem = new MenuItem { Header = "名前を変更..." };
+            var renameItem = new MenuItem { Header = T("TreeView.CtxM.Rename.Item") };
             renameItem.Click += async (s, e) => await Rename(treeViewItem);
             menu.Items.Add(renameItem);
 
             // フィードの場合のみURLコピー機能を追加する
             if (tag.Type == TreeNodeType.Feed)
             {
-                var copyUrlItem = new MenuItem { Header = "URLをコピー" };
+                var copyUrlItem = new MenuItem { Header = T("TreeView.CtxM.Copy.FeedUrl") };
                 copyUrlItem.Click += (s, e) =>
                 {
                     // クリップボードにURLを格納
                     Clipboard.SetText(tag.Url);
                     // 操作結果をユーザーに通知
-                    _log.Text = $"URLをコピーしました: {tag.Url}";
+                    _log.Text = TF("LogText.Log.Copy.FeedUrl", tag.Url);
                 };
                 menu.Items.Add(copyUrlItem);
             }
@@ -101,7 +103,8 @@ namespace FeedGem.UIHelpers
             // 削除メニュー（フィードとフォルダで表示名を切り替える）
             var deleteItem = new MenuItem
             {
-                Header = tag.Type == TreeNodeType.Folder ? "フォルダを削除" : "このフィードを削除",
+                Header = tag.Type == TreeNodeType.Folder ?
+                    T("TreeView.CtxM.Delete.Folder") : T("TreeView.CtxM.Delete.Feed"),
                 Tag = "Danger"
             };
 
@@ -116,8 +119,8 @@ namespace FeedGem.UIHelpers
                     if (hasContents)
                     {
                         var result = MessageBox.Show(
-                            "フォルダ内のフィードと記事もすべて削除されます。続行しますか？",
-                            "フォルダの削除",
+                            T("TreeView.Msg.Delete.Folder"),
+                            T("TreeView.CtxM.Delete.Folder"),
                             MessageBoxButton.YesNo,
                             MessageBoxImage.Warning);
 
@@ -127,7 +130,8 @@ namespace FeedGem.UIHelpers
                 else
                 {
                     // フィードの場合は常に確認を行う
-                    if (MessageBox.Show("削除しますか？", "確認", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+                    if (MessageBox.Show(T("TreeView.Msg.Delete.Feed"), T("TreeView.Msg.Confirm"),
+                            MessageBoxButton.YesNo) != MessageBoxResult.Yes)
                         return;
                 }
 
@@ -144,19 +148,19 @@ namespace FeedGem.UIHelpers
         // 全更新
         private async Task SyncAll()
         {
-            _log.Text = "記事を更新中...";
+            _log.Text = T("LogText.Log.UpdateAll");
             Mouse.OverrideCursor = Cursors.Wait;
 
             try
             {
                 await _updateService.UpdateAllAsync();
                 _updateTime();
-                _log.Text = "更新が完了しました。";
+                _log.Text = T("LogText.Log.UpdateCompleted");
             }
             catch (Exception ex)
             {
                 LoggingService.Error("Failed to sync all", ex);
-                _log.Text = "更新中にエラーが発生しました。";
+                _log.Text = T("LogText.Log.UpdateError");
             }
             finally
             {
@@ -167,7 +171,7 @@ namespace FeedGem.UIHelpers
         // フォルダ追加
         private async Task AddFolder(TreeViewItem? target)
         {
-            var dialog = new InputDialog("新しいフォルダ名");
+            var dialog = new InputDialog(T("TreeView.Dlg.Input.Name"));
 
             if (Application.Current?.MainWindow != null)
                 dialog.Owner = Application.Current.MainWindow;
@@ -179,7 +183,8 @@ namespace FeedGem.UIHelpers
             // 名前が空文字の場合はエラーを表示して終了する
             if (string.IsNullOrWhiteSpace(name))
             {
-                MessageBox.Show("フォルダ名を入力してください。", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(T("TreeView.Msg.Create.Folder"), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
@@ -196,7 +201,8 @@ namespace FeedGem.UIHelpers
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(TF("TreeView.Msg.Error", ex.Message), "Error",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -206,7 +212,7 @@ namespace FeedGem.UIHelpers
             if (item.Tag is not TreeTag tag) return;
 
             string currentName = tag.Name;
-            var dialog = new InputDialog("新しい名前", currentName);
+            var dialog = new InputDialog(T("TreeView.Dlg.Input.Name"), currentName);
 
             if (Application.Current?.MainWindow != null)
                 dialog.Owner = Application.Current.MainWindow;
@@ -231,7 +237,7 @@ namespace FeedGem.UIHelpers
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"予期せぬエラーが発生しました：{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(TF("TreeView.Msg.Error", ex.Message), "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
     }

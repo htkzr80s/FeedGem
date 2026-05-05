@@ -1,6 +1,8 @@
 ﻿using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
+using static FeedGem.Services.LocalizationService;
+
 
 namespace FeedGem.Services
 {
@@ -35,9 +37,12 @@ namespace FeedGem.Services
                 decoded = decoded.Replace("\n", "<br>");
             }
 
-            // --- 空対策 ---
+            // JSON内のキーに対応する翻訳を取得する
+            string emptyMessage = T("PreviewHtml.Preview.None");
+
+            // --- 空対策 --- 取得した翻訳メッセージをHTMLの要素として埋め込む
             string bodyContent = string.IsNullOrWhiteSpace(decoded)
-                ? "<p class='empty'>（プレビューを表示できる内容がありません。ブラウザで確認してください。）</p>"
+                ? $"<p class='empty'>{emptyMessage}</p>"
                 : decoded;
 
             // --- HTML構築 ---

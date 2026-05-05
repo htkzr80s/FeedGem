@@ -38,10 +38,10 @@
     "CtxM.UpdateAll": "Update all",
     "Dlg.Input.Name": "New name",
     "Msg.Confirm": "Confirm",
-    "Msg.Create.Folder": "Enter folder name",
+    "Msg.Create.Folder": "Folder name cannot be empty.",
     "Msg.Delete.Feed": "Delete this feed?",
     "Msg.Delete.Folder": "Are you sure you want to delete all feeds and articles in this folder?",
-    "Msg.Error": "An unexpected error occurred",
+    "Msg.Error": "An unexpected error occurred: {0}",
     "Tip.Failure.Persistent": "Failed to update for 24+ hours",
     "Tip.Failure.Transient": "Temporary update error",
     "Tip.NotFound": "404: Feed not found (skipping update)"

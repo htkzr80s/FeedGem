@@ -90,6 +90,24 @@ namespace FeedGem.Services
         // インスタンス（Instance）経由で GetText を呼ぶだけの static メソッド
         public static string T(string key) => Instance.GetText(key);
 
+        /// <param name="args">埋め込む値</param>
+        public static string TF(string key, params object[] args)
+        {
+            // 指定したキーで翻訳を取得する
+            string pattern = T(key);
+
+            try
+            {
+                // 取得した文字列（例："URL copied: {0}"）に引数を流し込む
+                return string.Format(pattern, args);
+            }
+            catch
+            {
+                // フォーマットに失敗した場合は、フォールバックとしてキーと値をそのまま出す
+                return $"{key}: {string.Join(", ", args)}";
+            }
+        }
+
         public string GetText(string key)
         {
             return _translations.TryGetValue(key, out var text) ? text : key;
