@@ -6,9 +6,68 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
 </p>
 
+## 📌 Overview
+**FeedGem** is a simple 3-pane RSS reader developed by an individual with no prior programming experience, built entirely through AI-assisted coding. It is a lightweight, portable application featuring multi-language support and a dark theme.
+
+---
+
+## ⚠️ Disclaimer
+Please read the following carefully before using this software:
+
+* **Experimental Project**: This application is intended for learning and experimental purposes. There is no guarantee of stability or completeness as a production-grade software.
+* **No Warranty**: The author assumes no responsibility for any damages (data loss, PC malfunctions, etc.) incurred through the use of this software.
+* **No Support**: As the developer is a non-programmer, individual bug fixes, feature requests, or technical support cannot be provided.
+* **Open for Modification**: Feel free to modify, redistribute, or fork this project as you wish.
+
+---
+
+## 💻 Environment
+- **OS**: Windows (x64 only)
+- **Framework**: WPF
+- **Prerequisites**: .NET 10.0 Runtime
+
+---
+
+## ✨ Key Features
+- [x] **Portable**: No installation required.
+- [x] **Multi-language**: English and Japanese built-in. Easily extendable to other languages via JSON files.
+- [x] **Folder Management**: Organize feeds using single-level folders.
+- [x] **Feed Discovery**: Automatically find RSS feeds from websites.
+- [x] **Dark Theme**: Support for dark mode UI.
+- [x] **OPML Support**: Import and export your feed lists.
+
+### ⚠️ Current Limitations
+- Keyboard shortcuts are not supported.
+- Fine-grained customization and advanced settings are unavailable.
+
+---
+
+## 🛠 Libraries (NuGet)
+This project utilizes the following libraries:
+
+| Library | Purpose |
+| :--- | :--- |
+| `System.ServiceModel.Syndication` | Feed parsing |
+| `Microsoft.Data.Sqlite` | Database management |
+| `HtmlAgilityPack` | HTML parsing |
+| `Microsoft.Web.WebView2` | Web content rendering |
+| `H.NotifyIcon.Wpf` | System tray notifications |
+
+---
+
+## 📄 License
+This project is licensed under the **MIT License**.
+See the [LICENSE](./LICENSE) file for more details.
+
+---
+
+© 2026 htkzr80s
+
+---
+
 ## 📌 概要
 **FeedGem** は、プログラム未経験の個人がAIによるコーディングのみで作成した、3ペイン型のシンプルなRSSリーダーです。
-ポータブル性に優れ、多言語対応やダークテーマなど、基本的な機能を備えています。
+ポータブル形式、多言語対応やダークテーマなど、基本的な機能を備えています。
 
 ---
 
