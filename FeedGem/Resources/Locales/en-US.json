@@ -63,6 +63,7 @@
   "LogText": {
     "Log.App.Ready": "Ready.",
     "Log.App.LaunchError": "Could not initialize all components. Some features may be limited.",
+    "Log.Config.Saved": "Settings saved.",
     "Log.Copy.FeedUrl": "URL copied: {0}",
     "Log.Copy.ArticleTitle": "Title copied.",
     "Log.Copy.ArticleUrl": "URL copied.",

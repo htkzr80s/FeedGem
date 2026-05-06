@@ -28,8 +28,6 @@
                       FontSize="14"
                       VerticalContentAlignment="Center"
                       SelectionChanged="ComboLanguage_SelectionChanged">
-                <ComboBoxItem Content="English" Tag="en-US"/>
-                <ComboBoxItem Content="日本語" Tag="ja-JP"/>
             </ComboBox>
             
             <!-- セクションタイトル -->

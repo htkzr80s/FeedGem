@@ -43,6 +43,8 @@ namespace FeedGem.Views
             // 言語変更イベントに登録
             LocalizationService.Instance.LanguageChanged += ApplyTranslations;
 
+            App.OnStatusMessage = message => LogTextBlock.Text = message;
+
             // データベースパスの決定とサービスの初期化を行う
             string dbPath = EnsureAndGetDatabasePath();
             _repository = new FeedRepository(dbPath);

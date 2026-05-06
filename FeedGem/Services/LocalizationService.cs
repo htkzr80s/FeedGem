@@ -34,10 +34,15 @@ namespace FeedGem.Services
                 _translations = FlattenJson(englishElement);
             }
 
-            // 2. 指定言語が英語以外なら、その内容で上書き（マージ）する
+            // 2. 英語以外の場合、外部ファイル → 埋め込みリソースの順で上書き
             if (cultureCode != "en-US")
             {
-                JsonElement targetElement = LoadEmbeddedJson($"{ResourceBasePath}.{cultureCode}.json");
+                // 外部 Language フォルダを優先して試みる
+                JsonElement targetElement = LoadExternalJson(cultureCode);
+
+                // 外部になければ埋め込みリソースを試みる
+                if (targetElement.ValueKind == JsonValueKind.Undefined)
+                    targetElement = LoadEmbeddedJson($"{ResourceBasePath}.{cultureCode}.json");
 
                 if (targetElement.ValueKind != JsonValueKind.Undefined)
                 {
@@ -70,6 +75,95 @@ namespace FeedGem.Services
             using var doc = JsonDocument.Parse(json);
             return doc.RootElement.Clone(); // CloneしないとDisposeで消えてしまうため
         }
+
+        // 外部 Language フォルダから、locale が一致する JSON を検索して読み込む
+        private static JsonElement LoadExternalJson(string cultureCode)
+        {
+            string langDir = Path.Combine(AppContext.BaseDirectory, "Language");
+            if (!Directory.Exists(langDir)) return default;
+
+            // フォルダ内の全JSONを走査してlocaleが一致するファイルを探す
+            foreach (string file in Directory.GetFiles(langDir, "*.json"))
+            {
+                try
+                {
+                    string json = File.ReadAllText(file, System.Text.Encoding.UTF8);
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    // _metadata.locale が一致するファイルを採用する
+                    if (!root.TryGetProperty("_metadata", out var meta)) continue;
+                    if (!meta.TryGetProperty("locale", out var localeProp)) continue;
+                    if (localeProp.GetString() != cultureCode) continue;
+
+                    // 最初に見つかったファイルを採用する（同一ロケールが複数ある場合は先勝ち）
+                    System.Diagnostics.Debug.WriteLine($"[LocalizationService] Loaded external:"
+                        + $"{Path.GetFileName(file)}");
+
+                    return root.Clone();
+                }
+                catch
+                {
+                    // 壊れたファイルは無視してフォールバックに任せる
+                }
+            }
+            return default;
+        }
+
+        // Language フォルダをスキャンして利用可能な言語一覧を返す
+        public static List<LanguageEntry> DiscoverAvailableLanguages()
+        {
+            var result = new List<LanguageEntry>
+            {
+                // 組み込みの英語は常に先頭に追加
+                new("English", "en-US"),
+                new("日本語", "ja-JP")
+            };
+
+            string langDir = Path.Combine(AppContext.BaseDirectory, "Language");
+            if (!Directory.Exists(langDir)) return result;
+
+            // 登録済みロケールの重複チェック用
+            var addedLocales = new HashSet<string> { "en-US", "ja-JP" };
+
+            foreach (string file in Directory.GetFiles(langDir, "*.json"))
+            {
+                try
+                {
+                    string json = File.ReadAllText(file, System.Text.Encoding.UTF8);
+                    using var doc = JsonDocument.Parse(json);
+                    var root = doc.RootElement;
+
+                    // _metadata セクションが存在しない場合はスキップ
+                    if (!root.TryGetProperty("_metadata", out var meta)) continue;
+                    if (!meta.TryGetProperty("language", out var langProp)) continue;
+                    if (!meta.TryGetProperty("locale", out var localeProp)) continue;
+
+                    string displayName = langProp.GetString() ?? "";
+                    string locale = localeProp.GetString() ?? "";
+
+                    // 組み込み済み言語リスト
+                    var builtInLocales = new[] { "en-US", "ja-JP" };
+
+                    // 組み込み済み言語はスキップ
+                    if (builtInLocales.Contains(locale)) continue;
+
+                    // 同一ロケールが複数ファイルに存在する場合は先勝ち
+                    if (!addedLocales.Add(locale)) continue;
+
+                    result.Add(new LanguageEntry(displayName, locale));
+                }
+                catch
+                {
+                    // 解析できないファイルは無視する
+                }
+            }
+
+            return result;
+        }
+
+        // 言語エントリーの定義（表示名とカルチャコードのペア）
+        public record LanguageEntry(string DisplayName, string CultureCode);
 
         // 階層構造を「Parent.Child」形式のフラットなキーに変換する
         private static Dictionary<string, string> FlattenJson(JsonElement element, string prefix = "")

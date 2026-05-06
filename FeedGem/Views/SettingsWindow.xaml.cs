@@ -20,6 +20,9 @@ namespace FeedGem.Views
             _originalTheme = config.Theme;
             _originalLanguage = config.Language ?? "en-US";
 
+            // 利用可能な言語をスキャンしてコンボボックスを構築する
+            PopulateLanguageCombo();
+
             // UIの初期選択状態をセット
             InitializeSelections(_originalTheme, _originalLanguage);
 
@@ -34,6 +37,22 @@ namespace FeedGem.Views
 
             // 翻訳を適用
             ApplyTranslations();
+        }
+
+        // Language フォルダをスキャンし、ComboBox を動的に構築する
+        private void PopulateLanguageCombo()
+        {
+            ComboLanguage.Items.Clear();
+
+            var languages = LocalizationService.DiscoverAvailableLanguages();
+            foreach (var lang in languages)
+            {
+                ComboLanguage.Items.Add(new ComboBoxItem
+                {
+                    Content = lang.DisplayName,
+                    Tag = lang.CultureCode
+                });
+            }
         }
 
         // コントロールの初期選択状態を反映

@@ -5,11 +5,14 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using static FeedGem.Services.LocalizationService;
 
 namespace FeedGem
 {
     public partial class App : Application
     {
+        public static Action<string>? OnStatusMessage { get; set; }
+
         // 2重起動防止用のミューテックスインスタンス
         private static Mutex? _mutex;
 
@@ -66,7 +69,11 @@ namespace FeedGem
             return config;
         }
 
-        public static void SaveConfig(AppConfig config) => ConfigManager.Save(config);
+        public static void SaveConfig(AppConfig config)
+        {
+            ConfigManager.Save(config);
+            OnStatusMessage?.Invoke(T("LogText.Log.Config.Saved"));
+        }
 
         // WinForms非依存のためのWin32 API定義
         [StructLayout(LayoutKind.Sequential)]

@@ -62,7 +62,8 @@
   },
   "LogText": {
     "Log.App.Ready": "準備が完了しました。",
-    "Log.App.LaunchError": "アプリの起動に失敗しました。一部機能が制限されます。",  
+    "Log.App.LaunchError": "アプリの起動に失敗しました。一部機能が制限されます。",
+    "Log.Config.Saved": "設定を保存しました。",
     "Log.Copy.FeedUrl": "URLをコピーしました: {0}",
     "Log.Copy.ArticleTitle": "タイトルをコピーしました。",
     "Log.Copy.ArticleUrl": "URLをコピーしました。",
