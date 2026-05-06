@@ -23,17 +23,17 @@ namespace FeedGem.Views
             // UIの初期選択状態をセット
             InitializeSelections(_originalTheme, _originalLanguage);
 
-            // 言語変更イベントに登録
-            LocalizationService.Instance.LanguageChanged += ApplyTranslations;
-
-            // 翻訳を適用
-            ApplyTranslations();
-
             // 初期化後のイベント購読
             RadioDark.Checked += RadioTheme_Checked;
             RadioLight.Checked += RadioTheme_Checked;
             RadioAuto.Checked += RadioTheme_Checked;
             ComboLanguage.SelectionChanged += ComboLanguage_SelectionChanged;
+
+            // 言語変更イベントに登録
+            LocalizationService.Instance.LanguageChanged += ApplyTranslations;
+
+            // 翻訳を適用
+            ApplyTranslations();
         }
 
         // コントロールの初期選択状態を反映

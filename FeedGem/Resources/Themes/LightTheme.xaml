@@ -20,6 +20,13 @@
 
     <SolidColorBrush x:Key="StatusBarBackgroundBrush" Color="#EAEAEA"/>
 
+    <!-- ComboBox用ブラシ -->
+    <SolidColorBrush x:Key="ComboBoxBackgroundBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ComboBoxForegroundBrush" Color="#1A1A1A"/>
+    <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#AAAAAA"/>
+    <SolidColorBrush x:Key="ComboBoxDropdownBackgroundBrush" Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ComboBoxItemHoverBrush" Color="#E8E8E8"/>
+
     <!-- Window -->
     <Style TargetType="Window">
         <Setter Property="Background" Value="{DynamicResource WindowBackgroundBrush}" />
@@ -399,11 +406,140 @@
         <Setter Property="FontSize" Value="13"/>
     </Style>
 
-    <!-- コンボボックス -->
+    <!-- ドロップダウン内の各行 -->
+    <Style TargetType="ComboBoxItem">
+        <Setter Property="Foreground" Value="{DynamicResource ComboBoxForegroundBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource ComboBoxDropdownBackgroundBrush}"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBoxItem">
+                    <Border x:Name="ItemBorder"
+                        Background="{TemplateBinding Background}"
+                        Padding="{TemplateBinding Padding}">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ItemBorder"
+                                Property="Background"
+                                Value="{DynamicResource ComboBoxItemHoverBrush}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="ItemBorder"
+                                Property="Background"
+                                Value="{DynamicResource ComboBoxItemHoverBrush}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ComboBox本体 -->
     <Style TargetType="ComboBox">
-        <Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
-        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+        <Setter Property="Background"      Value="{DynamicResource ComboBoxBackgroundBrush}"/>
+        <Setter Property="Foreground"      Value="{DynamicResource ComboBoxForegroundBrush}"/>
+        <Setter Property="BorderBrush"     Value="{DynamicResource ComboBoxBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding"         Value="6,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ComboBox">
+                    <Grid x:Name="MainGrid">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="24"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 本体の枠 -->
+                        <Border Grid.ColumnSpan="2"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="3"/>
+
+                        <!-- 選択中の値の表示（編集不可モード用・WPFが必須とする部品） -->
+                        <ContentPresenter Grid.Column="0"
+                                      x:Name="ContentSite"
+                                      Margin="{TemplateBinding Padding}"
+                                      VerticalAlignment="Center"
+                                      HorizontalAlignment="Left"
+                                      Content="{TemplateBinding SelectionBoxItem}"
+                                      ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                      ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}"/>
+
+                        <!-- 編集可能モード用テキストボックス（IsEditable=Trueのときに使われる・WPFが必須とする部品） -->
+                        <TextBox Grid.Column="0"
+                             x:Name="PART_EditableTextBox"
+                             Margin="{TemplateBinding Padding}"
+                             VerticalAlignment="Center"
+                             Background="Transparent"
+                             Foreground="{TemplateBinding Foreground}"
+                             BorderThickness="0"
+                             Visibility="Hidden"
+                             IsReadOnly="{TemplateBinding IsReadOnly}"/>
+
+                        <!-- 矢印ボタン（クリックでドロップダウンを開く） -->
+                        <ToggleButton Grid.ColumnSpan="2"
+                                      Focusable="False"
+                                      IsChecked="{Binding IsDropDownOpen,
+                                                  RelativeSource={RelativeSource TemplatedParent},
+                                                  Mode=TwoWay}">
+                            <ToggleButton.Template>
+                                <ControlTemplate TargetType="ToggleButton">
+                                    <!-- ホバー・押下時の色変化を完全に無効化した透明ボタン -->
+                                    <Border Background="Transparent">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="24"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- 矢印アイコンを右端に表示 -->
+                                            <Path Grid.Column="1"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center"
+                                                  Data="M 0 0 L 5 5 L 10 0"
+                                                  Stroke="{DynamicResource ComboBoxForegroundBrush}"
+                                                  StrokeThickness="1.5"/>
+                                        </Grid>
+                                    </Border>
+                                </ControlTemplate>
+                            </ToggleButton.Template>
+                        </ToggleButton>
+
+                        <!-- ドロップダウンのポップアップ（WPFが必須とする部品） -->
+                        <Popup x:Name="PART_Popup"
+                           Grid.ColumnSpan="2"
+                           AllowsTransparency="True"
+                           IsOpen="{TemplateBinding IsDropDownOpen}"
+                           Placement="Bottom"
+                           PopupAnimation="Slide">
+                            <Border MinWidth="{Binding ActualWidth,
+                                           RelativeSource={RelativeSource TemplatedParent}}"
+                                    MaxHeight="{TemplateBinding MaxDropDownHeight}"
+                                    Background="{DynamicResource ComboBoxDropdownBackgroundBrush}"
+                                    BorderBrush="{DynamicResource ComboBoxBorderBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="3">
+                                <ScrollViewer>
+                                    <!-- 項目一覧（WPFが必須とする部品） -->
+                                    <ItemsPresenter/>
+                                </ScrollViewer>
+                            </Border>
+                        </Popup>
+                    </Grid>
+
+                    <!-- 編集可能モードの切り替え制御 -->
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsEditable" Value="True">
+                            <Setter TargetName="ContentSite"    Property="Visibility" Value="Hidden"/>
+                            <Setter TargetName="PART_EditableTextBox" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
 </ResourceDictionary>
