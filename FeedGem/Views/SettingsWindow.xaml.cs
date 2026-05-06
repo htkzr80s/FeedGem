@@ -37,6 +37,8 @@ namespace FeedGem.Views
 
             // 翻訳を適用
             ApplyTranslations();
+
+            this.Unloaded += Window_Unloaded;
         }
 
         // Language フォルダをスキャンし、ComboBox を動的に構築する
@@ -136,6 +138,11 @@ namespace FeedGem.Views
             ThemeTextBlock.Text = T("OtherWindow.Settings.Text.Theme");
             RadioAuto.Content = T("OtherWindow.Settings.Radio.ThemeAuto");
             LangTextBlock.Text = T("OtherWindow.Settings.Text.Language");
+        }
+
+        private void Window_Unloaded(object sender, RoutedEventArgs e)
+        {
+            LocalizationService.Instance.LanguageChanged -= ApplyTranslations;
         }
     }
 }

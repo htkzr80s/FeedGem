@@ -20,6 +20,7 @@ namespace FeedGem.Views
             // 言語変更イベントに登録
             LocalizationService.Instance.LanguageChanged += ApplyTranslations;
             ApplyTranslations();
+            this.Unloaded += Window_Unloaded;
 
             // まず全て未選択にする
             foreach (var c in candidates)
@@ -66,6 +67,11 @@ namespace FeedGem.Views
         private void ApplyTranslations()
         {
             SelectFeedText.Text = T("OtherWindow.Dlg.Select.Feed");
+        }
+
+        private void Window_Unloaded(object sender, RoutedEventArgs e)
+        {
+            LocalizationService.Instance.LanguageChanged -= ApplyTranslations;
         }
     }
 }
