@@ -336,8 +336,11 @@ namespace FeedGem.Views
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
+            // 設定ファイルの保存など、閉じる前に完了させるべき処理を行う
             SaveCurrentConfig();
-            LocalizationService.Instance.LanguageChanged -= ApplyTranslations;
+            
+            // 基本クラスの処理を呼び出す
+            base.OnClosing(e);
         }
 
         // ウィンドウが完全に閉じた後の処理
