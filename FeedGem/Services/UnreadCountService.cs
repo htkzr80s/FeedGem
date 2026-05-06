@@ -27,34 +27,45 @@ namespace FeedGem.Services
             }
         }
 
-        // ツリーの各項目を再帰的に巡回し、未読数を反映させる
-        private static async Task UpdateItemRecursive(TreeViewItem item, Dictionary<long, int> unreadMap)
+        // ツリーの各項目を再帰的に巡回し、未読数を反映させる。戻り値はその項目の最終的な未読数
+        private static async Task<int> UpdateItemRecursive(TreeViewItem item, Dictionary<long, int> unreadMap)
         {
-            if (item.Tag is TreeTag tag && tag.Type == TreeNodeType.Feed && tag.Id != 0)
-            {
-                // マップから該当IDの未読数を取得。存在しない場合は0とする
-                int unread = unreadMap.TryGetValue(tag.Id, out int count) ? count : 0;
+            if (item.Tag is not TreeTag tag) return 0;
 
-                // 保持している未読数と差分がある場合のみ、UI表示を更新する
-                if (tag.UnreadCount != unread)
+            int currentUnread;
+
+            if (tag.Type == TreeNodeType.Feed)
+            {
+                // フィードの場合はDBから取得した値をそのまま使用する
+                currentUnread = unreadMap.TryGetValue(tag.Id, out int count) ? count : 0;
+            }
+            else
+            {
+                // フォルダの場合は子要素の未読数をすべて合計する
+                int totalChildUnread = 0;
+                foreach (TreeViewItem child in item.Items)
                 {
-                    tag.UnreadCount = unread;
-
-                    string displayName = unread > 0 ? $"{tag.Name} ({unread})" : tag.Name;
-
-                    item.Header = FeedTreeHeader.Create(
-                        displayName,
-                        tag.Type == TreeNodeType.Folder,
-                        tag.Url
-                    );
+                    totalChildUnread += await UpdateItemRecursive(child, unreadMap);
                 }
+                currentUnread = totalChildUnread;
             }
 
-            // 子階層の項目に対しても同様の処理を繰り返す
-            foreach (TreeViewItem child in item.Items)
+            // 保持している未読数と差分がある場合のみ、UI表示を更新する
+            if (tag.UnreadCount != currentUnread)
             {
-                await UpdateItemRecursive(child, unreadMap);
+                tag.UnreadCount = currentUnread;
+
+                string displayName = currentUnread > 0 ? $"{tag.Name} ({currentUnread})" : tag.Name;
+
+                // ヘッダーの再生成（FeedTreeHeaderは既存の仕組みを利用）
+                item.Header = FeedTreeHeader.Create(
+                    displayName,
+                    tag.Type == TreeNodeType.Folder,
+                    tag.Url
+                );
             }
+
+            return currentUnread;
         }
     }
 }
