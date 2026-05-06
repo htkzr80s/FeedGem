@@ -6,7 +6,7 @@ using System.Windows.Media.Imaging;
 
 namespace FeedGem.Services
 {
-    internal class TrayIconManager
+    internal class TrayIconManager : IDisposable
     {
         private readonly TaskbarIcon? _taskbarIcon;
         private readonly MainWindow _window;
@@ -25,7 +25,9 @@ namespace FeedGem.Services
             _repository = repository;
 
             LoadIcons();
-            _taskbarIcon.TrayLeftMouseUp += TaskbarIcon_TrayLeftMouseUp;
+
+            // タスクバーアイコンが存在する場合のみイベントを登録
+            _taskbarIcon?.TrayLeftMouseUp += TaskbarIcon_TrayLeftMouseUp;
         }
 
         private void LoadIcons()
@@ -67,6 +69,21 @@ namespace FeedGem.Services
 
             int totalUnread = await _unreadCountService.GetTotalUnreadAsync();
             _taskbarIcon.IconSource = totalUnread > 0 ? _unreadTrayIcon : _normalTrayIcon;
+        }
+
+        // インスタンス破棄時の後片付け処理
+        public void Dispose()
+        {
+            // イベント購読の解除
+            _taskbarIcon?.TrayLeftMouseUp -= TaskbarIcon_TrayLeftMouseUp;
+
+            // アイコンリソースの解放
+            _normalTrayIcon = null;
+            _unreadTrayIcon = null;
+            _errorTrayIcon = null;
+
+            // ガベージコレクションへの通知
+            GC.SuppressFinalize(this);
         }
     }
 }

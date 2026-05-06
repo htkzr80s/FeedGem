@@ -187,7 +187,7 @@ namespace FeedGem.UIHelpers
             // 名前が空文字の場合はエラーを表示して終了する
             if (string.IsNullOrWhiteSpace(name))
             {
-                MessageBox.Show(T("TreeView.Msg.Create.Folder"), "Error",
+                MessageBox.Show(T("TreeView.Msg.Create.Folder"), "Warning",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }

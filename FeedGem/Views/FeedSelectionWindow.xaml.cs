@@ -1,4 +1,5 @@
 ﻿using FeedGem.Models;
+using FeedGem.Services;
 using System.Windows;
 using static FeedGem.Services.LocalizationService;
 
@@ -16,6 +17,8 @@ namespace FeedGem.Views
         {
             InitializeComponent();
             SetupWindowIcon();
+            // 言語変更イベントに登録
+            LocalizationService.Instance.LanguageChanged += ApplyTranslations;
             ApplyTranslations();
 
             // まず全て未選択にする

@@ -399,4 +399,11 @@
         <Setter Property="FontSize" Value="13"/>
     </Style>
 
+    <!-- コンボボックス -->
+    <Style TargetType="ComboBox">
+        <Setter Property="Background" Value="{DynamicResource ControlBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
+    </Style>
+
 </ResourceDictionary>

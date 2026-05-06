@@ -35,6 +35,9 @@ namespace FeedGem
             var config = LoadConfig();
             ThemeManager.ApplyTheme(config.Theme);
 
+            // 保存されている言語を LocalizationService に適用
+            LocalizationService.Instance.LoadLanguage(config.Language ?? "en-US");
+
             // テーマ適用後にMainWindowを生成・表示
             var mainWindow = new MainWindow();
             Current.MainWindow = mainWindow;
@@ -140,6 +143,13 @@ namespace FeedGem
         public static void ApplyThemePreview(string theme)
         {
             ThemeManager.ApplyTheme(theme);
+        }
+
+        // 言語を画面に反映させるだけの処理（保存はしない）
+        public static void ApplyLanguagePreview(string cultureCode)
+        {
+            // LocalizationService のインスタンスを通じて言語をロード
+            LocalizationService.Instance.LoadLanguage(cultureCode);
         }
 
         protected override void OnExit(ExitEventArgs e)

@@ -1,62 +1,101 @@
-﻿using System.Windows;
+﻿using FeedGem.Services;
+using System.Windows;
+using System.Windows.Controls;
 using static FeedGem.Services.LocalizationService;
 
 namespace FeedGem.Views
 {
     public partial class SettingsWindow : Window
     {
-        // ダイアログ起動時の元のテーマを記憶（キャンセル時に復元するため）
-        private readonly string originalTheme;
+        // キャンセル時に復元するため、元のテーマと言語を保持する
+        private readonly string _originalTheme;
+        private readonly string _originalLanguage;
 
         public SettingsWindow()
         {
             InitializeComponent();
 
+            // 現在の設定をロード
+            var config = App.LoadConfig();
+            _originalTheme = config.Theme;
+            _originalLanguage = config.Language ?? "en-US";
+
+            // UIの初期選択状態をセット
+            InitializeSelections(_originalTheme, _originalLanguage);
+
+            // 言語変更イベントに登録
+            LocalizationService.Instance.LanguageChanged += ApplyTranslations;
+
+            // 翻訳を適用
             ApplyTranslations();
 
-            // 現在の設定を反映
-            var config = App.LoadConfig();
-            originalTheme = config.Theme;  // 元のテーマを保存
-
-            switch (config.Theme)
-            {
-                case "Dark":
-                    RadioDark.IsChecked = true;
-                    break;
-                case "Light":
-                    RadioLight.IsChecked = true;
-                    break;
-                default: // Auto
-                    RadioAuto.IsChecked = true;
-                    break;
-            }
-
-            // ラジオボタンのCheckedイベントを購読（XAML変更不要）
-            // 初期設定後に購読することで不要なイベント発火を防止
+            // 初期化後のイベント購読
             RadioDark.Checked += RadioTheme_Checked;
             RadioLight.Checked += RadioTheme_Checked;
             RadioAuto.Checked += RadioTheme_Checked;
+            ComboLanguage.SelectionChanged += ComboLanguage_SelectionChanged;
+        }
+
+        // コントロールの初期選択状態を反映
+        private void InitializeSelections(string theme, string lang)
+        {
+            // テーマラジオボタンの選択
+            switch (theme)
+            {
+                case "Dark": RadioDark.IsChecked = true; break;
+                case "Light": RadioLight.IsChecked = true; break;
+                default: RadioAuto.IsChecked = true; break;
+            }
+
+            // 言語コンボボックスの選択（Tagを基準に検索）
+            foreach (ComboBoxItem item in ComboLanguage.Items)
+            {
+                if (item.Tag.ToString() == lang)
+                {
+                    ComboLanguage.SelectedItem = item;
+                    break;
+                }
+            }
         }
 
         // ラジオボタン選択時にテーマを即時適用（保存は行わない）
         private void RadioTheme_Checked(object sender, RoutedEventArgs e)
         {
-            if (sender is System.Windows.Controls.RadioButton radio && radio.IsChecked == true)
+            if (sender is RadioButton radio && radio.IsChecked == true)
             {
                 string theme = radio.Name.Replace("Radio", "");
                 App.ApplyThemePreview(theme);
             }
         }
 
+        // 言語プルダウン変更時のイベント
+        private void ComboLanguage_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (ComboLanguage.SelectedItem is ComboBoxItem item)
+            {
+                // 選択されたカルチャコードを取得
+                string lang = item.Tag.ToString()!;
+
+                // 言語のプレビュー適用
+                App.ApplyLanguagePreview(lang);
+
+                // UIテキストの再適用
+                ApplyTranslations();
+            }
+        }
+
         private void OkButton_Click(object sender, RoutedEventArgs e)
         {
-            string selectedTheme = "Auto";
-            if (RadioDark.IsChecked == true) selectedTheme = "Dark";
-            else if (RadioLight.IsChecked == true) selectedTheme = "Light";
-
-            // すでに適用済みなので保存のみ実行（App経由でConfigManager.Saveを呼ぶ）
             var config = App.LoadConfig();
-            config.Theme = selectedTheme;
+
+            // 現在選択されているテーマを判定
+            config.Theme = RadioDark.IsChecked == true ? "Dark" :
+                          RadioLight.IsChecked == true ? "Light" : "Auto";
+
+            // 現在選択されている言語を取得
+            config.Language = (ComboLanguage.SelectedItem as ComboBoxItem)?.Tag.ToString() ?? "en-US";
+
+            // 設定ファイルへ保存
             App.SaveConfig(config);
 
             DialogResult = true;
@@ -65,8 +104,9 @@ namespace FeedGem.Views
 
         private void CancelButton_Click(object sender, RoutedEventArgs e)
         {
-            // キャンセル時は元のテーマに戻す（保存はしない）
-            App.ApplyThemePreview(originalTheme);
+            // 保存せずに起動時の状態を再適用
+            App.ApplyThemePreview(_originalTheme);
+            App.ApplyLanguagePreview(_originalLanguage);
 
             DialogResult = false;
             Close();

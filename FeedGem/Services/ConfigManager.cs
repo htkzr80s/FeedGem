@@ -88,7 +88,10 @@ namespace FeedGem.Services
     // 設定をまとめたクラス
     public class AppConfig
     {
-        public string Theme { get; set; } = "Auto";           // Auto / Dark / Light
+        // Auto / Dark / Light
+        public string Theme { get; set; } = "Auto";
+        // 言語設定 (en-US / ja-JP)
+        public string Language { get; set; } = "en-US";
         public double WindowLeft { get; set; } = 100;
         public double WindowTop { get; set; } = 100;
         public double WindowWidth { get; set; } = 1400;

@@ -40,6 +40,9 @@ namespace FeedGem.Views
             // UIとウィンドウの初期設定を行う
             SetupWindowAppearance();
 
+            // 言語変更イベントに登録
+            LocalizationService.Instance.LanguageChanged += ApplyTranslations;
+
             // データベースパスの決定とサービスの初期化を行う
             string dbPath = EnsureAndGetDatabasePath();
             _repository = new FeedRepository(dbPath);
@@ -334,7 +337,24 @@ namespace FeedGem.Views
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
             SaveCurrentConfig();
+            LocalizationService.Instance.LanguageChanged -= ApplyTranslations;
+        }
+
+        // ウィンドウが完全に閉じた後の処理
+        protected override void OnClosed(EventArgs e)
+        {
+            // タイマーの停止とリソースの解放
             _backgroundTimer?.Dispose();
+
+            // トレイアイコンなどのリソースがあれば明示的に破棄する
+            _trayManager?.Dispose();
+
+            // 静的なサービスへのイベント購読を解除し、メモリリークを防止する
+            LocalizationService.Instance.LanguageChanged -= ApplyTranslations;
+            ThemeManager.ThemeChanged -= OnThemeChanged;
+
+            // 基本クラスの処理を呼び出す
+            base.OnClosed(e);
         }
 
         // 現在のウィンドウ状態（位置・サイズ・カラム幅）をConfig.iniに保存
@@ -499,13 +519,13 @@ namespace FeedGem.Views
                 case SubscribeResult.AlreadySubscribed:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.AlreadySubscribed");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.AlreadySubscribed"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
 
                 case SubscribeResult.SkippedOrEmpty:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.SkippedOrEmpty");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.SkippedOrEmpty"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
 
                 case SubscribeResult.Error:
@@ -517,13 +537,13 @@ namespace FeedGem.Views
                 case SubscribeResult.NoCandidates:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.NoCandidates");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.NoCandidates"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
 
                 case SubscribeResult.TooManyCandidates:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.TooManyCandidates");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.TooManyCandidates"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
             }
         }

@@ -14,6 +14,9 @@ namespace FeedGem.Services
         // 埋め込みリソースのベースパス
         private const string ResourceBasePath = "FeedGem.Resources.Locales";
 
+        // 言語が変更された時に通知するためのイベント
+        public event Action? LanguageChanged;
+
         private LocalizationService()
         {
             // 初期化時にデフォルトの英語をロード
@@ -46,6 +49,9 @@ namespace FeedGem.Services
                     }
                 }
             }
+
+            // 言語の切り替えが終わった最後に、登録されているすべてのWindowへ通知を送る
+            LanguageChanged?.Invoke();
         }
 
         // 戻り値を Dictionary ではなく JsonElement にしている点に注目
