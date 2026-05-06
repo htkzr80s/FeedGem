@@ -1,4 +1,4 @@
-# FeedGem (Experimental)
+# FeedGem (Experimental / AI-Generated)
 
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Experimental-orange?style=for-the-badge" alt="Status">
