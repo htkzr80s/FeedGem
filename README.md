@@ -6,6 +6,10 @@
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
 </p>
 
+![Main](Docs/MainWindow.png)
+
+![Settings](Docs/Settings.png)
+
 ## 📌 Overview
 **FeedGem** is a simple 3-pane RSS reader developed by an individual with no prior programming experience, built entirely through AI-assisted coding. It is a lightweight, portable application featuring multi-language support and a dark theme.
 
