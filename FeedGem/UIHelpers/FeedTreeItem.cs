@@ -3,27 +3,61 @@ using System.Windows.Controls;
 
 namespace FeedGem.UIHelpers
 {
+    // ツリー項目の生成と状態管理を担当するクラス
     public static class FeedTreeItem
     {
-        // TreeNodeModelからWPFのTreeViewItemを生成する
-        public static TreeViewItem Create(TreeNodeModel node)
+        // TreeViewから現在開いている項目のID一覧を抽出する
+        public static HashSet<long> GetExpandedIds(ItemCollection items)
+        {
+            var expandedIds = new HashSet<long>();
+            // 再帰的にチェックを開始
+            CollectExpandedIds(items, expandedIds);
+            return expandedIds;
+        }
+
+        // 内部用：再帰的に展開状態をチェックする
+        private static void CollectExpandedIds(ItemCollection items, HashSet<long> expandedIds)
+        {
+            // TreeView内の各項目を確認
+            foreach (TreeViewItem item in items)
+            {
+                // 項目が展開されており、かつTagにIDが記録されているか確認
+                if (item.IsExpanded && item.Tag is TreeTag tag)
+                {
+                    // セットにIDを保存
+                    expandedIds.Add(tag.Id);
+                }
+
+                // 子要素に対しても同じ処理を繰り返す
+                if (item.Items.Count > 0)
+                {
+                    CollectExpandedIds(item.Items, expandedIds);
+                }
+            }
+        }
+
+        // データをTreeViewItemに変換する。保存されたIDがあれば展開状態を復元する
+        public static TreeViewItem Create(TreeNodeModel node, HashSet<long>? expandedIds = null)
         {
             // 未読数がある場合は名前の横に件数を表示する
             string displayName = node.UnreadCount > 0
                 ? $"{node.Name} ({node.UnreadCount})"
                 : node.Name;
 
-            // ヘッダー表示用の要素を作成する（フォルダかフィードかで切り替え）
+            // フォルダかフィードかに応じてヘッダー要素を生成する
             var header = node.IsFolder
                 ? FeedTreeHeader.Create(displayName, true)
                 : FeedTreeHeader.Create(displayName, false, node.Url, node.ErrorState);
 
-            // TreeViewに表示する1項目（Item）を生成する
+            // 保存された展開リストに自身のIDが含まれているか確認
+            bool shouldExpand = node.IsFolder && expandedIds != null && expandedIds.Contains(node.Id);
+
+            // TreeViewItemのインスタンスを作成
             var item = new TreeViewItem
             {
-                Header = header,
-                // Tagに必要な情報をすべて詰め込む
-                Tag = new TreeTag
+                Header = header, // UI要素をセット
+                IsExpanded = shouldExpand, // 以前の状態を適用
+                Tag = new TreeTag // 識別情報を格納
                 {
                     Id = node.Id,
                     ParentId = node.ParentId,
@@ -33,13 +67,13 @@ namespace FeedGem.UIHelpers
                     SortOrder = node.SortOrder,
                     Url = node.Url
                 },
-                IsExpanded = true
             };
 
-            // 子要素（サブフォルダやフィード）があれば再帰的に追加する
+            // 子ノードがある場合は再帰的に追加
             foreach (var child in node.Children)
             {
-                item.Items.Add(Create(child));
+                // 子の生成時にも展開リストを引き継ぐ
+                item.Items.Add(Create(child, expandedIds));
             }
 
             return item;

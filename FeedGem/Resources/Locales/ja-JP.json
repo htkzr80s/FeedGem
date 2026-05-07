@@ -4,7 +4,7 @@
     "locale": "ja-JP",
     "author": "FeedGem",
     "version": "1.0.0",
-    "updated_at": "2026-05-03"
+    "updated_at": "2026-05-07"
   },
   "MainWindow": {
     "Bar.Box.Filter": "記事を検索",
@@ -12,13 +12,13 @@
     "Bar.LastupdatePrefix": "最終更新:{0}",
     "Btn.Open.Browser": "ブラウザで開く",
     "Msg.Article.LoadFailed": "記事の読み込みに失敗しました：{0} ",
+    "Msg.InsecureHttp.Warning": "セキュリティ保護のため、暗号化されていない接続（HTTP）は利用できません。この機能を有効にするにはドキュメントを参照してください。",
     "Msg.Opml.ExportFailed": "OPMLのエクスポートに失敗しました。",
     "Msg.Opml.ImportFailed": "OPMLのインポートに失敗しました。",
     "Msg.Subscribe.AlreadySubscribed": "既に登録済みのため中止しました。",
     "Msg.Subscribe.Error": "購読中にエラーが発生しました。",
     "Msg.Subscribe.NoCandidates": "フィードが見つかりませんでした。",
     "Msg.Subscribe.SkippedOrEmpty": "未対応のURLのため購読を中止しました。",
-    "Msg.Subscribe.TooManyCandidates": "候補が多すぎるため処理を中止しました。",
     "Tip.Btn.FilterClear": "検索をクリア",
     "Tip.Btn.Settings": "設定",
     "Tip.Btn.Subscribe": "購読を実行",
@@ -53,6 +53,7 @@
   },
   "OtherWindow": {
     "Dlg.Select.Feed": "複数のフィードが見つかりました。追加するものを選択してください。",
+    "Dlg.Select.LimitWarning": "多数の候補が見つかりました。上位のみを表示しています。目的のサイトが見つからない場合は、より詳細なURLを入力してください。",
     "Settings.Radio.ThemeAuto": "Auto（システム設定に従う）",
     "Settings.Text.Theme": "テーマ",
     "Settings.Text.Language": "言語"
@@ -82,7 +83,6 @@
     "Log.Subscribe.Error": "購読中にエラーが発生しました。",
     "Log.Subscribe.NoCandidates": "フィードが見つかりませんでした。",
     "Log.Subscribe.SkippedOrEmpty": "未対応のURLのため購読を中止しました。",
-    "Log.Subscribe.Success": "フィードを追加しました。",
-    "Log.Subscribe.TooManyCandidates": "購読URLが多すぎるため処理を中止しました。"
+    "Log.Subscribe.Success": "フィードを追加しました。"
   }
 }

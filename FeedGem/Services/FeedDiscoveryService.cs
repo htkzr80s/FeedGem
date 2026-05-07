@@ -1,4 +1,5 @@
-﻿using FeedGem.Models;
+﻿using FeedGem.Core;
+using FeedGem.Models;
 using HtmlAgilityPack;
 using System.Net.Http;
 using System.ServiceModel.Syndication;
@@ -9,23 +10,12 @@ namespace FeedGem.Services
     public class FeedDiscoveryService
     {
         private static readonly string[] CommonPaths =
-        [
-            "/feed",
-            "/feed/",
-            "/rss",
-            "/rss.xml",
-            "/feed.xml",
-            "/rss2.xml",
-            "/atom.xml",
-            "/index.xml",
-            "/index.rdf",
-            "/feeds/posts/default",
-            "/feeds/posts/default?alt=rss",
-            "/feeds/posts/default?alt=atom",
-            "/releases.atom",
-            "/commits.atom",
-            "/atom"
-        ];
+                [
+                    "/feed", "/feed/", "/rss", "/rss.xml", "/feed.xml", "/rss2.xml",
+                    "/atom.xml", "/index.xml", "/index.rdf", "/feeds/posts/default",
+                    "/feeds/posts/default?alt=rss", "/feeds/posts/default?alt=atom",
+                    "/releases.atom", "/commits.atom", "/atom"
+                ];
 
         // フィード候補を探す（3段階: 直接取得 → HTML解析 → パス推測）
         public static async Task<List<FeedCandidate>> DiscoverFeedsAsync(string url)
@@ -33,128 +23,127 @@ namespace FeedGem.Services
             var candidates = new List<FeedCandidate>();
             var http = HttpClientProvider.Client;
 
-            // 1. 入力されたURLそのものをフィードとして試す
-            var direct = await TryLoadFeedAsync(http, url);
+            // HTTPで入力された場合でも、安全なHTTPSでの試行を優先する
+            string secureUrl = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                ? "https://" + url[7..]
+                : url;
+
+            // 1. 入力URLを直接検証
+            var direct = await TryLoadFeedAsync(http, secureUrl);
+
+            // 入力URL自体が有効なフィードなら、まず候補に追加する
             if (direct != null)
             {
                 candidates.Add(direct);
-                return candidates;
+
+                // 4Gamerの例のように、明らかに「目次」のようなRSSページである場合、
+                // さらにその中のリンクを掘り下げる必要があるため、ここでは return せずに続行する
             }
 
-            // 2. HTML内の <link> タグからフィードURLを探す
+            // 2. HTML内の <link> タグから探す
             string? html = null;
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                html = await http.GetStringAsync(url, cts.Token);
+                var response = await http.GetAsync(secureUrl, cts.Token);
+
+                // 403 Forbidden が出た場合は、それ以上の探索（パス推測）を中止する
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    LoggingService.Info($"Discovery: 403 Forbidden at {secureUrl}. Stopping further discovery.");
+                    return candidates;
+                }
+
+                if (response.IsSuccessStatusCode)
+                {
+                    html = await response.Content.ReadAsStringAsync();
+                }
             }
             catch (Exception ex)
             {
-                LoggingService.Error($"Discovery: Failed to retrieve HTML: {url}", ex);
+                LoggingService.Info($"Discovery: Primary HTML fetch failed: {ex.Message}");
             }
 
             if (html != null)
             {
-                foreach (var candidate in ParseFeedLinksFromHtml(html, url))
+                foreach (var candidate in ParseFeedLinksFromHtml(html, secureUrl))
                 {
-                    if (!candidates.Any(c => c.Url == candidate.Url))
+                    if (candidates.Count >= AppSettings.MaxCandidateCount) break;
+                    if (!candidates.Any(c => NormalizeUrl(c.Url) == NormalizeUrl(candidate.Url)))
                         candidates.Add(candidate);
                 }
             }
 
-            if (candidates.Count > 0)
-                return candidates;
+            if (candidates.Count >= AppSettings.MaxCandidateCount) return candidates;
 
-            // 3. よくあるパスを推測して試す
-            Uri baseUri;
-            try { baseUri = new Uri(url); }
-            catch { return candidates; }
+            // 3. パス推測フェーズ（負荷を考慮し、少し待機を入れる）
+            if (!Uri.TryCreate(secureUrl, UriKind.Absolute, out var baseUri)) return candidates;
 
             foreach (var path in CommonPaths)
             {
+                if (candidates.Count >= AppSettings.MaxCandidateCount) break;
+
+                // 連続アクセスによるBANを防ぐため、リクエスト間に短いウェイトを置く
+                await Task.Delay(200);
+
                 try
                 {
                     var testUri = new Uri(baseUri, path);
                     var candidate = await TryLoadFeedAsync(http, testUri.AbsoluteUri);
-                    if (candidate != null && !candidates.Any(c => c.Url == candidate.Url))
+
+                    if (candidate != null && !candidates.Any(c => NormalizeUrl(c.Url) == NormalizeUrl(candidate.Url)))
                         candidates.Add(candidate);
                 }
                 catch (Exception ex)
                 {
-                    LoggingService.Error($"Discovery: Failed to infer feed URL: {url}{path}", ex);
+                    // 403が出たら即座にループを抜けて終了する
+                    if (ex.Message.Contains("403")) break;
                 }
             }
 
             return candidates;
         }
 
-        // 指定URLをXMLとして読み込み、フィードとして有効なら FeedCandidate を返す
+        // 指定URLをXMLとして読み込み検証する
         private static async Task<FeedCandidate?> TryLoadFeedAsync(HttpClient http, string url)
         {
             try
             {
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                using var stream = await http.GetStreamAsync(url, cts.Token);
+                // GetStreamAsyncではなくGetAsyncを使い、ステータスコードをチェックできるようにする
+                var response = await http.GetAsync(url, cts.Token);
 
-                var settings = new XmlReaderSettings
-                {
-                    DtdProcessing = DtdProcessing.Ignore,
-                    XmlResolver = null,
-                };
+                if (!response.IsSuccessStatusCode) return null;
 
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Ignore, XmlResolver = null };
                 using var reader = XmlReader.Create(stream, settings);
 
-                // 最初の要素ノードまで読み進めてルート要素名を取得する
                 while (reader.Read())
                 {
-                    if (reader.NodeType == XmlNodeType.Element) break;
-                }
+                    if (reader.NodeType != XmlNodeType.Element) continue;
+                    string rootName = reader.LocalName.ToLowerInvariant();
 
-                // rss / feed（Atom）/ RDF 以外はフィードとみなさない
-                string rootName = reader.LocalName;
-                if (rootName != "rss" && rootName != "feed" && rootName != "RDF")
-                    return null;
-
-                // ルート要素名でフォーマットを確定する
-                string feedType = rootName == "feed" ? "Atom" : "RSS";
-
-                // ルート要素の位置から SyndicationFeed を読み込む
-                SyndicationFeed synFeed;
-                try
-                {
-                    synFeed = SyndicationFeed.Load(reader);
-                }
-                catch (Exception ex)
-                {
-                    LoggingService.Error($"Discovery: Failed to load SyndicationFeed: {url}", ex);
+                    if (rootName is "rss" or "feed" or "rdf")
+                    {
+                        string feedType = rootName == "feed" ? "Atom" : "RSS";
+                        return new FeedCandidate
+                        {
+                            Title = $"{url} ({feedType})",
+                            OriginalTitle = url,
+                            Url = url,
+                            Type = feedType
+                        };
+                    }
                     return null;
                 }
-
-                string originalTitle = synFeed.Title?.Text?.Trim() ?? "Feed";
-                string displayTitle = originalTitle;
-
-                // タイトルにフォーマット名が含まれていない場合のみ付加する
-                if (!displayTitle.Contains("RSS") && !displayTitle.Contains("Atom"))
-                    displayTitle += $" ({feedType})";
-
-                return new FeedCandidate
-                {
-                    Title = displayTitle,
-                    OriginalTitle = originalTitle,
-                    Url = url,
-                    Type = feedType
-                };
-            }
-            catch (XmlException ex)
-            {
-                LoggingService.Info($"Discovery: Invalid XML format: {url} - {ex.Message}");
-                return null;
             }
             catch (Exception ex)
             {
-                LoggingService.Error($"Discovery: Failed to load feed: {url}", ex);
-                return null;
+                // 403エラー時は呼び出し元へ例外を投げて検知させる
+                if (ex.Message.Contains("403")) throw;
             }
+            return null;
         }
 
         // HTMLソースの <link> タグを解析してフィード候補リストを返す
@@ -177,15 +166,18 @@ namespace FeedGem.Services
 
                 foreach (var node in nodes)
                 {
+                    // 設定された最大件数を超えたら解析を中止
+                    if (candidates.Count >= AppSettings.MaxCandidateCount) break;
+
                     string rel = node.GetAttributeValue("rel", "");
                     string typeAttr = node.GetAttributeValue("type", "");
                     string href = node.GetAttributeValue("href", "");
-                    string title = System.Net.WebUtility.HtmlDecode(
-                                          node.GetAttributeValue("title", ""));
+                    string title = System.Net.WebUtility.HtmlDecode(node.GetAttributeValue("title", ""));
 
+                    // フィードを指すリンクか判定
                     if (!IsFeedLink(rel, typeAttr, title, href)) continue;
 
-                    // コメント・トラックバック系フィードは除外する
+                    // 不要なコメント用フィード等は除外
                     if (href.Contains("comment", StringComparison.OrdinalIgnoreCase) ||
                         href.Contains("trackback", StringComparison.OrdinalIgnoreCase) ||
                         href.Contains("comments", StringComparison.OrdinalIgnoreCase))
@@ -219,7 +211,7 @@ namespace FeedGem.Services
             return candidates;
         }
 
-        // <link> タグがフィードを指しているか判定する
+        // linkタグの属性からフィードリンクか判断する
         private static bool IsFeedLink(string rel, string typeAttr, string title, string href)
         {
             string relLower = rel.ToLowerInvariant();
@@ -227,30 +219,65 @@ namespace FeedGem.Services
             string titleLower = title.ToLowerInvariant();
             string hrefLower = href.ToLowerInvariant();
 
-            // rel="alternate" を持つもののみ対象とする
+            // rel属性にalternateが含まれていることを必須条件とする
             if (!relLower.Contains("alternate")) return false;
 
+            // 属性値からフィードに関連するキーワードが含まれているか判定
             if (typeLower.Contains("rss") || typeLower.Contains("atom") || typeLower.Contains("xml")) return true;
             if (titleLower.Contains("rss") || titleLower.Contains("atom") || titleLower.Contains("feed")) return true;
-            if (hrefLower.Contains("rss") || hrefLower.Contains("atom") || hrefLower.Contains("feed")
-                || hrefLower.EndsWith(".xml")) return true;
+            if (hrefLower.Contains("rss") || hrefLower.Contains("atom") || hrefLower.Contains("/feed") || hrefLower.EndsWith(".xml")) return true;
 
             return false;
         }
 
-        // 相対URLを絶対URLに変換する
-        private static string ResolveUrl(Uri baseUri, string href)
+        // URLの微細な違い（http/https、末尾の/）を無視して比較するための正規化メソッド
+        private static string NormalizeUrl(string url)
         {
-            if (href.StartsWith("//"))
-                return $"{baseUri.Scheme}:{href}";
-
-            if (Uri.TryCreate(href, UriKind.Absolute, out var absolute))
-                return absolute.ToString();
-
-            return new Uri(baseUri, href).AbsoluteUri;
+            try
+            {
+                var uri = new Uri(url.ToLowerInvariant());
+                // ホスト名とパスのみを抽出して比較のキーとする
+                string normalized = uri.Host + uri.AbsolutePath;
+                return normalized.TrimEnd('/');
+            }
+            catch
+            {
+                // 解析不能なURLは小文字化と末尾削除のみ行う
+                return url.ToLowerInvariant().TrimEnd('/');
+            }
         }
 
-        // type属性またはURLからフォーマット（RSS / Atom）を判定する
+        // 相対URLを絶対URLに変換し、必要に応じてHTTPSに昇格させるメソッド
+        private static string ResolveUrl(Uri baseUri, string href)
+        {
+            string resolved;
+
+            // スキーム省略（//）から始まるURLへの対応
+            if (href.StartsWith("//"))
+            {
+                resolved = $"{baseUri.Scheme}:{href}";
+            }
+            // 絶対URLとして解釈可能な場合
+            else if (Uri.TryCreate(href, UriKind.Absolute, out var absolute))
+            {
+                resolved = absolute.ToString();
+            }
+            // それ以外は相対パスとして結合
+            else
+            {
+                resolved = new Uri(baseUri, href).AbsoluteUri;
+            }
+
+            // ベースがHTTPSなら、解決されたURLもHTTPSに強制アップグレードする
+            if (baseUri.Scheme == "https" && resolved.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                resolved = "https://" + resolved[7..];
+            }
+
+            return resolved;
+        }
+
+        // URLやtype属性からRSSかAtomかを特定する
         private static string GetFeedType(string typeAttrOrLocalName, string absoluteUrl)
         {
             string value = typeAttrOrLocalName?.ToLowerInvariant() ?? string.Empty;
@@ -263,6 +290,23 @@ namespace FeedGem.Services
                 return "RSS";
 
             return "Unknown";
+        }
+
+        // 指定されたURLがセキュリティ設定（AllowInsecureHttp）に違反していないか検証する
+        public static bool IsUrlSecurityAllowed(string url)
+        {
+            // URLが http:// で始まっているか判定（大文字小文字を区別しない）
+            if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            {
+                // 設定で非暗号化通信が許可されていない場合は false を返す
+                if (!AppSettings.AllowInsecureHttp)
+                {
+                    return false;
+                }
+            }
+
+            // https:// の場合、または http:// でも設定で許可されている場合は true を返す
+            return true;
         }
     }
 }

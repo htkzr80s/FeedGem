@@ -51,7 +51,7 @@ namespace FeedGem.Services
             sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
 
             sb.Append("<style>");
-            sb.Append("body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.8; padding: 24px; font-size: 18px;}");
+            sb.Append("body { font-family: -apple-system, system-ui, sans-serif; line-height: 1.8; padding: 24px; font-size: 16px;}");
             sb.Append("h2 { border-bottom: 2px solid; padding-bottom: 8px; font-size: 1.4em; }");
             sb.Append("img { max-width: 100%; height: auto; border-radius: 4px; }");
             sb.Append("pre { padding: 10px; overflow-x: auto; }");

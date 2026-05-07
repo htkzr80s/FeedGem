@@ -100,5 +100,6 @@ namespace FeedGem.Services
         public double ArticleListWidth { get; set; } = 450;
         public int MaxCandidateCount { get; set; } = 10;
         public int MaxArticleCount { get; set; } = 30;
+        public static bool AllowInsecureHttp { get; set; } = false;
     }
 }

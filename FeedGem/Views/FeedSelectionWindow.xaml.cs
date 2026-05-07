@@ -12,10 +12,13 @@ namespace FeedGem.Views
             (CandidateListBox.ItemsSource as List<FeedCandidate>)?
             .Where(f => f.IsSelected).ToList() ?? [];
 
+        private readonly bool _isLimitReached;
+
         // コンストラクタ
-        public FeedSelectionWindow(List<FeedCandidate> candidates)
+        public FeedSelectionWindow(List<FeedCandidate> candidates, bool isLimitReached)
         {
             InitializeComponent();
+            _isLimitReached = isLimitReached;
             SetupWindowIcon();
             // 言語変更イベントに登録
             LocalizationService.Instance.LanguageChanged += ApplyTranslations;
@@ -64,9 +67,18 @@ namespace FeedGem.Views
             this.DialogResult = false; // ダイアログの結果をfalseに設定して閉じる
         }
 
+        // 翻訳とテキスト設定を行うメソッド
         private void ApplyTranslations()
         {
-            SelectFeedText.Text = T("OtherWindow.Dlg.Select.Feed");
+            if (_isLimitReached)
+            {
+                // 上限に達した時専用の文言を表示
+                SelectFeedText.Text = T("OtherWindow.Dlg.Select.LimitWarning");
+            }
+            else
+            {
+                SelectFeedText.Text = T("OtherWindow.Dlg.Select.Feed");
+            }
         }
 
         private void Window_Unloaded(object sender, RoutedEventArgs e)

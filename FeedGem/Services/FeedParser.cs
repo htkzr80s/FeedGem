@@ -28,21 +28,25 @@ namespace FeedGem.Services
             var root = doc.Root;
             if (root == null) return [];
 
+            List<ArticleItem> results;
+
             // Atom 1.0 の判定
             if (root.Name.LocalName == "feed")
-                // タイトルとURLが両方揃っている記事のみを返す
-                return [.. ParseAtom(doc).Where(a =>
-                    !string.IsNullOrWhiteSpace(a.Title) &&
-                    !string.IsNullOrWhiteSpace(a.Url))];
+                results = [.. ParseAtom(doc).Where(a =>
+            !string.IsNullOrWhiteSpace(a.Title) &&
+            !string.IsNullOrWhiteSpace(a.Url))];
 
             // RSS 2.0 / RSS 1.0(RDF) の判定
-            if (root.Name.LocalName == "rss" || root.Name.LocalName == "RDF")
-                // タイトルとURLが両方揃っている記事のみを返す
-                return [.. ParseRss(doc).Where(a =>
-                    !string.IsNullOrWhiteSpace(a.Title) &&
-                    !string.IsNullOrWhiteSpace(a.Url))];
+            else if (root.Name.LocalName == "rss" || root.Name.LocalName == "RDF")
+                results = [.. ParseRss(doc).Where(a =>
+            !string.IsNullOrWhiteSpace(a.Title) &&
+            !string.IsNullOrWhiteSpace(a.Url))];
 
-            return [];
+            else
+                return [];
+
+            // フィード側の並び順に依存しないよう、日付の降順（新しい順）で並び替える
+            return [.. results.OrderByDescending(a => a.Date)];
         }
 
         // Atom 1.0 形式を解析する

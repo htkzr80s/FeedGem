@@ -475,25 +475,37 @@ namespace FeedGem.Views
 
                 var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
 
+                // candidates.Count がこの値に達していれば「上限に達した」と判断できる
+                bool isLimitReached = candidates.Count >= AppSettings.MaxCandidateCount;
+
                 Mouse.OverrideCursor = null;
 
                 var result = await _subscriptionService.HandleCandidatesAsync(candidates);
 
-                if (result == SubscribeResult.NeedsSelection)
+                // 1件見つかったが、設定によりHTTP接続が拒否された場合
+                if (result == SubscribeResult.InsecureHttp)
                 {
-                    var window = new FeedSelectionWindow(candidates) { Owner = this };
+                    ShowInsecureHttpWarning();
+                    return;
+                }
+
+                else if (result == SubscribeResult.NeedsSelection)
+                {
+                    var window = new FeedSelectionWindow(candidates, isLimitReached) { Owner = this };
 
                     if (window.ShowDialog() == true)
                     {
                         var selected = window.SelectedFeeds.FirstOrDefault();
-                        if (selected != null)
+
+                        // 選択されたURLを共通メソッドでチェックし、NGなら中断する
+                        if (selected == null || !FeedDiscoveryService.IsUrlSecurityAllowed(selected.Url))
                         {
-                            result = await _subscriptionService.AddFeedAsync(selected);
+                            ShowInsecureHttpWarning();
+                            return;
                         }
-                        else
-                        {
-                            result = SubscribeResult.Error;
-                        }
+
+                        // 安全性が確認できたら登録を実行
+                        result = await _subscriptionService.AddFeedAsync(selected);
                     }
                     else
                     {
@@ -524,13 +536,13 @@ namespace FeedGem.Views
                 case SubscribeResult.AlreadySubscribed:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.AlreadySubscribed");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.AlreadySubscribed"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
 
                 case SubscribeResult.SkippedOrEmpty:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.SkippedOrEmpty");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.SkippedOrEmpty"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
 
                 case SubscribeResult.Error:
@@ -542,15 +554,21 @@ namespace FeedGem.Views
                 case SubscribeResult.NoCandidates:
                     LogTextBlock.Text = T("LogText.Log.Subscribe.NoCandidates");
                     MessageBox.Show(T("MainWindow.Msg.Subscribe.NoCandidates"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
-                    break;
-
-                case SubscribeResult.TooManyCandidates:
-                    LogTextBlock.Text = T("LogText.Log.Subscribe.TooManyCandidates");
-                    MessageBox.Show(T("MainWindow.Msg.Subscribe.TooManyCandidates"),
-                        "Error", MessageBoxButton.OK, MessageBoxImage.Information);
+                        "Info", MessageBoxButton.OK, MessageBoxImage.Information);
                     break;
             }
+        }
+
+        // セキュリティ制限（HTTP接続拒否）表示し、ログを更新する
+        private void ShowInsecureHttpWarning()
+        {
+            MessageBox.Show(
+                T("MainWindow.Msg.InsecureHttp.Warning"),
+                "Warning",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+
+            LogTextBlock.Text = T("LogText.Log.Subscribe.Cancelled");
         }
 
         // 記事検索ボックスにフォーカスが当たった時の処理
@@ -787,19 +805,24 @@ namespace FeedGem.Views
         // フォルダ階層を考慮してフィード一覧を表示する
         private async Task LoadFeedsToTreeViewAsync()
         {
+            // 現在展開されている項目のID一覧をあらかじめ取得しておく
+            var expandedIds = FeedTreeItem.GetExpandedIds(FeedTreeView.Items);
+
             FeedTreeView.Items.Clear();
 
             var nodes = await _treeBuilder.BuildTreeDataAsync();
 
+            // 取得したデータをもとにTreeViewItemを生成して追加
             foreach (var node in nodes)
             {
-                var item = FeedTreeItem.Create(node);
-                // フィード選択イベント再設定
+                // 取得しておいた展開状態（expandedIds）を渡して生成
+                var item = FeedTreeItem.Create(node, expandedIds);
+
                 AttachSelectionHandler(item);
+
                 FeedTreeView.Items.Add(item);
             }
 
-            // トレイアイコン更新
             await _trayManager.UpdateIconAsync();
         }
 

@@ -3,7 +3,6 @@ using FeedGem.Models;
 using System.IO;
 using System.ServiceModel.Syndication;
 using System.Xml;
-using FeedGem.Core;
 
 namespace FeedGem.Services
 {
@@ -13,9 +12,9 @@ namespace FeedGem.Services
         Success,
         NeedsSelection,
         NoCandidates,
-        TooManyCandidates,
         SkippedOrEmpty,
         AlreadySubscribed,
+        InsecureHttp,
         Canceled,
         Error
     }
@@ -28,9 +27,20 @@ namespace FeedGem.Services
         {
             if (candidates.Count == 0) return SubscribeResult.NoCandidates;
 
-            if (candidates.Count > AppSettings.MaxCandidateCount) return SubscribeResult.TooManyCandidates;
+            if (candidates.Count == 1)
+            {
+                var singleCandidate = candidates[0];
 
-            if (candidates.Count == 1) return await AddFeedAsync(candidates[0]);
+                // 登録前に、そのURLがセキュリティポリシー（HTTP許可設定）に適合するか確認
+                if (!FeedDiscoveryService.IsUrlSecurityAllowed(singleCandidate.Url))
+                {
+                    // ポリシー違反（HTTPかつ未許可）なら、UI側で警告を出す
+                    return SubscribeResult.InsecureHttp;
+                }
+
+                // セキュリティチェックを通過した場合はそのまま登録を実行
+                return await AddFeedAsync(singleCandidate);
+            }
 
             if (candidates.Count > 1) return SubscribeResult.NeedsSelection;
 
