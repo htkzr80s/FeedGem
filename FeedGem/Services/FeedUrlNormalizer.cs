@@ -88,7 +88,8 @@ namespace FeedGem.Services
             if (host.EndsWith("blog.fc2.com"))
             {
                 builder.Path = "/";
-                builder.Query = "xml";
+                // FC2 は ?xml&all の両パラメータが必要なため明示的に設定する
+                builder.Query = "xml&all";
                 return builder.Uri.ToString();
             }
 

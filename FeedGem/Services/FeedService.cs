@@ -49,13 +49,18 @@ namespace FeedGem.Services
                 // --- Content-Typeチェック ---
                 string mediaType = response.Content.Headers.ContentType?.MediaType ?? "";
 
-                if (!string.IsNullOrEmpty(mediaType) &&
+                bool isExplicitlyUnsupported =
+                    !string.IsNullOrEmpty(mediaType) &&
                     !mediaType.Contains("xml") &&
                     !mediaType.Contains("rss") &&
                     !mediaType.Contains("atom") &&
-                    !mediaType.Contains("html"))
+                    !mediaType.Contains("html") &&
+                    !mediaType.Contains("text") &&
+                    !mediaType.Contains("json");
+
+                if (isExplicitlyUnsupported)
                 {
-                    throw new FeedFormatException("Unsupported content type");
+                    throw new FeedFormatException($"Unsupported content type: {mediaType}");
                 }
 
                 // --- Stream取得 ---

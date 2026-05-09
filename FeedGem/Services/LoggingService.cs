@@ -26,6 +26,13 @@ namespace FeedGem.Services
             Write("ERROR", $"{message} - {ex.Message}");
         }
 
+        // デバッグ時のみ出力し、ファイルには保存しないログ
+        public static void DebugOnly(string message)
+        {
+            // Visual Studio のデバッグ出力（出力ウィンドウ）にのみ表示
+            Debug.WriteLine($"{DateTime.Now:yyyy-MM-dd HH:mm:ss} [DEBUG] {message}");
+        }
+
         // 実際の書き込み処理
         private static void Write(string level, string message)
         {

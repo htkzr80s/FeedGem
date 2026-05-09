@@ -50,7 +50,7 @@ namespace FeedGem.Services
                 // 403 Forbidden が出た場合は、それ以上の探索（パス推測）を中止する
                 if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                    LoggingService.Info($"Discovery: 403 Forbidden at {secureUrl}. Stopping further discovery.");
+                    LoggingService.DebugOnly($"Discovery: 403 Forbidden at {secureUrl}. Stopping further discovery.");
                     return candidates;
                 }
 
@@ -61,7 +61,7 @@ namespace FeedGem.Services
             }
             catch (Exception ex)
             {
-                LoggingService.Info($"Discovery: Primary HTML fetch failed: {ex.Message}");
+                LoggingService.DebugOnly($"Discovery: Primary HTML fetch failed: {ex.Message}");
             }
 
             if (html != null)
@@ -97,10 +97,10 @@ namespace FeedGem.Services
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                    // 403 が返ってきたらこのサーバーへの推測アクセスを即座に中止する
-                    LoggingService.Info($"Discovery: 403 during path probing. Stopping. ({baseUri.Host})");
-                    break;
-                }
+                        // 403 が返ってきたらこのサーバーへの推測アクセスを即座に中止する
+                        LoggingService.DebugOnly($"Discovery: 403 during path probing. Stopping. ({baseUri.Host})");
+                        break;
+                    }
             }
 
             return candidates;
@@ -153,7 +153,7 @@ namespace FeedGem.Services
             }
             catch (Exception ex)
             {
-                LoggingService.Info($"Discovery: TryLoadFeed failed: {url} - {ex.Message}");
+                LoggingService.DebugOnly($"Discovery: TryLoadFeed failed: {url} - {ex.Message}");
             }
             return null;
         }
