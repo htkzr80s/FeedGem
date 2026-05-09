@@ -9,15 +9,16 @@ namespace FeedGem.Services
         private readonly FeedService _feedService = feedService;
         public event EventHandler? AllUpdatesCompleted;
 
-        // 全フィード更新（UI・右クリック・定期処理すべてここに集約）
         public async Task UpdateAllAsync()
         {
             var feeds = await _repository.GetAllFeedsAsync();
 
-            // 並列数制御
-            var semaphore = new SemaphoreSlim(2);
+            // 全体の並列上限（異なるサイト間は並列で処理する）
+            var globalSemaphore = new SemaphoreSlim(5);
 
-            // リクエスト間隔のばらつき用（bot判定を避けるため固定値にしない）
+            // ホスト単位のセマフォを管理する辞書（同じサイトへの同時接続を1に制限する）
+            var hostSemaphores = new System.Collections.Concurrent.ConcurrentDictionary<string, SemaphoreSlim>();
+
             var rng = new Random();
 
             // 各フィードに対する更新タスクを作成
@@ -25,8 +26,16 @@ namespace FeedGem.Services
                 .Where(f => !string.IsNullOrEmpty(f.Url))
                 .Select(async feed =>
                 {
-                    // セマフォが空くまで待機
-                    await semaphore.WaitAsync();
+                    // ホスト名を取得する（取得失敗時はURLをそのままキーとして使う）
+                    string hostKey = Uri.TryCreate(feed.Url, UriKind.Absolute, out var uri)
+                        ? uri.Host
+                        : feed.Url;
+
+                    // ホスト単位のセマフォを取得（なければ新規作成）
+                    var hostSemaphore = hostSemaphores.GetOrAdd(hostKey, _ => new SemaphoreSlim(1));
+
+                    await globalSemaphore.WaitAsync();
+                    await hostSemaphore.WaitAsync();
                     try
                     {
                         // 404エラーが確定しているフィードは、無駄な通信を避けるためスキップ
@@ -35,7 +44,7 @@ namespace FeedGem.Services
                             return;
                         }
 
-                        // 各リクエストの前に 0.5〜2.0 秒のランダムウェイトを入れる
+                        // 同じホストへの連続アクセスを避けるためランダム間隔を入れる
                         int delayMs = rng.Next(500, 2000);
                         await Task.Delay(delayMs);
 
@@ -53,7 +62,7 @@ namespace FeedGem.Services
                         feed.LastFailureTime = DateTime.Now;
                         LoggingService.Error($"404: {feed.Title}", new Exception("404 Not Found"));
                     }
-                    catch (FeedFormatException ex)  // ← 追加
+                    catch (FeedFormatException ex)
                     {
                         // --- フィード形式エラー：通信は成功しているが内容が不正 ---
                         feed.ErrorState = FeedInfo.FeedErrorState.TemporaryFailure;
@@ -82,7 +91,8 @@ namespace FeedGem.Services
                     finally
                     {
                         await _repository.UpdateFeedStatusAsync(feed);
-                        semaphore.Release();
+                        hostSemaphore.Release();
+                        globalSemaphore.Release();
                     }
                 });
 
