@@ -2,12 +2,11 @@
 using FeedGem.Models;
 using HtmlAgilityPack;
 using System.Net.Http;
-using System.ServiceModel.Syndication;
 using System.Xml;
 
 namespace FeedGem.Services
 {
-    public class FeedDiscoveryService
+    public static class FeedDiscoveryService
     {
         private static readonly string[] CommonPaths =
                 [
@@ -22,6 +21,7 @@ namespace FeedGem.Services
         {
             var candidates = new List<FeedCandidate>();
             var http = HttpClientProvider.Client;
+            var rng = new Random();
 
             // HTTPで入力された場合でも、安全なHTTPSでの試行を優先する
             string secureUrl = url.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
@@ -83,8 +83,9 @@ namespace FeedGem.Services
             {
                 if (candidates.Count >= AppSettings.MaxCandidateCount) break;
 
-                // 連続アクセスによるBANを防ぐため、リクエスト間に短いウェイトを置く
-                await Task.Delay(200);
+                // 連続アクセスによるBAN・bot判定を避けるため、間隔をランダムにする
+                int delayMs = rng.Next(1000, 2000);
+                await Task.Delay(delayMs);
 
                 try
                 {
@@ -94,10 +95,11 @@ namespace FeedGem.Services
                     if (candidate != null && !candidates.Any(c => NormalizeUrl(c.Url) == NormalizeUrl(candidate.Url)))
                         candidates.Add(candidate);
                 }
-                catch (Exception ex)
+                catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                    // 403が出たら即座にループを抜けて終了する
-                    if (ex.Message.Contains("403")) break;
+                    // 403 が返ってきたらこのサーバーへの推測アクセスを即座に中止する
+                    LoggingService.Info($"Discovery: 403 during path probing. Stopping. ({baseUri.Host})");
+                    break;
                 }
             }
 
@@ -112,6 +114,12 @@ namespace FeedGem.Services
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 // GetStreamAsyncではなくGetAsyncを使い、ステータスコードをチェックできるようにする
                 var response = await http.GetAsync(url, cts.Token);
+
+                // 403 が返ってきた場合は、呼び出し元に検知させるため例外を投げる
+                if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                {
+                    throw new HttpRequestException("403 Forbidden", null, System.Net.HttpStatusCode.Forbidden);
+                }
 
                 if (!response.IsSuccessStatusCode) return null;
 
@@ -138,10 +146,14 @@ namespace FeedGem.Services
                     return null;
                 }
             }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            {
+                // 403 は再スローして呼び出し元に伝える
+                throw;
+            }
             catch (Exception ex)
             {
-                // 403エラー時は呼び出し元へ例外を投げて検知させる
-                if (ex.Message.Contains("403")) throw;
+                LoggingService.Info($"Discovery: TryLoadFeed failed: {url} - {ex.Message}");
             }
             return null;
         }

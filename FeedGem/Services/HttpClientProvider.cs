@@ -14,16 +14,41 @@ namespace FeedGem.Services
             // 自動デコンプレッションを有効化したハンドラーの生成
             var handler = new HttpClientHandler()
             {
-                AutomaticDecompression = System.Net.DecompressionMethods.All
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+
+                // リダイレクトを自動で追う（デフォルトは有効だが明示する）
+                AllowAutoRedirect = true,
+                MaxAutomaticRedirections = 5,
             };
 
             Client = new HttpClient(handler);
 
-            // ブラウザ（Chrome）を模倣したUser-Agentの設定
-            Client.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+            // Chrome 124 相当の User-Agent
+            Client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
 
-            // 標準的なAcceptヘッダーの設定
-            Client.DefaultRequestHeaders.Accept.ParseAdd("text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+            // ブラウザが送る標準的な Accept ヘッダー
+            Client.DefaultRequestHeaders.Accept.ParseAdd(
+                "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8");
+
+            // 圧縮を許容することをサーバーに伝える
+            Client.DefaultRequestHeaders.AcceptEncoding.ParseAdd("gzip, deflate, br");
+
+            // 接続を使い回す（Keep-Alive）
+            Client.DefaultRequestHeaders.Connection.ParseAdd("keep-alive");
+
+            // キャッシュを使わず常に最新を取得する
+            Client.DefaultRequestHeaders.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true
+            };
+
+            // Sec-Fetch 系ヘッダー（ブラウザが自動で送るセキュリティヒント）
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+            Client.DefaultRequestHeaders.Add("Upgrade-Insecure-Requests", "1");
 
             // 起動時の言語設定を反映
             UpdateAcceptLanguage();

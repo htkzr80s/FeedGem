@@ -29,6 +29,21 @@ namespace FeedGem.Services
                     throw new FeedNotFoundException();
                 }
 
+                // --- 429 Too Many Requests：サーバーから過負荷として拒否された場合 ---
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    // Retry-After ヘッダーがあればその秒数だけ待機し、なければ 60 秒待つ
+                    int waitSeconds = 60;
+                    if (response.Headers.TryGetValues("Retry-After", out var values) &&
+                        int.TryParse(values.FirstOrDefault(), out int retryAfter))
+                    {
+                        waitSeconds = retryAfter;
+                    }
+
+                    await Task.Delay(TimeSpan.FromSeconds(waitSeconds));
+                    throw new HttpRequestException($"Rate limited (429). Waited {waitSeconds}s.");
+                }
+
                 response.EnsureSuccessStatusCode();
 
                 // --- Content-Typeチェック ---

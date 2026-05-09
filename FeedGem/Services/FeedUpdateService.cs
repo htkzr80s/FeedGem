@@ -15,7 +15,10 @@ namespace FeedGem.Services
             var feeds = await _repository.GetAllFeedsAsync();
 
             // 並列数制御
-            var semaphore = new SemaphoreSlim(5);
+            var semaphore = new SemaphoreSlim(2);
+
+            // リクエスト間隔のばらつき用（bot判定を避けるため固定値にしない）
+            var rng = new Random();
 
             // 各フィードに対する更新タスクを作成
             var tasks = feeds
@@ -31,6 +34,10 @@ namespace FeedGem.Services
                         {
                             return;
                         }
+
+                        // 各リクエストの前に 0.5〜2.0 秒のランダムウェイトを入れる
+                        int delayMs = rng.Next(500, 2000);
+                        await Task.Delay(delayMs);
 
                         // フィードの取得と記事の保存処理を実行
                         await _feedService.FetchEntriesAsync(feed.Id, feed.Url);
