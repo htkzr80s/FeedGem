@@ -43,12 +43,10 @@ namespace FeedGem.Services
                 NoCache = true
             };
 
-            // Sec-Fetch 系ヘッダー（ブラウザが自動で送るセキュリティヒント）
-            Client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
-            Client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
-            Client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
-            Client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
-            Client.DefaultRequestHeaders.Add("Upgrade-Insecure-Requests", "1");
+            // Sec-Fetch 系ヘッダー（フィード取得に適した値に設定する）
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "empty");
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "cors");
+            Client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "cross-site");
 
             // 起動時の言語設定を反映
             UpdateAcceptLanguage();
