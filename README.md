@@ -1,5 +1,5 @@
 # FeedGem (Experimental / AI-Generated)
-
+  [![CodeQL](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql)
 <p align="center">
   <img src="https://img.shields.io/badge/Status-Experimental-orange?style=for-the-badge" alt="Status">
   <img src="https://img.shields.io/badge/Platform-Windows_x64-blue?style=for-the-badge" alt="Platform">
