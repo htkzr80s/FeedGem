@@ -1,16 +1,12 @@
 # FeedGem (Experimental / AI-Generated)
-  [![CodeQL](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql)
-<p align="center">
-  <a href="https://github.com/htkzr80s/FeedGem/releases/latest">
-    <img src="https://img.shields.io/badge/Platform-Windows_x64-blue?style=for-the-badge" alt="Platform">
-  </a>
-  <a href="https://dotnet.microsoft.com/">
-    <img src="https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white" alt=".NET">
-  </a>  
-  <a href="https://github.com/htkzr80s/FeedGem/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-  </a>  
-</p>
+<div align="center">
+  
+[![CodeQL](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql)
+[![Windows x64](https://img.shields.io/badge/Platform-Windows_x64-blue?style=for-the-badge)](https://github.com/htkzr80s/FeedGem/releases/)
+[![.NET 10](https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/10.0/runtime)
+[![MIT LICENSE](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE "License")
+
+</div>
 
 ![Main](FeedGem/Resources/Images/MainWindow.png)
 
