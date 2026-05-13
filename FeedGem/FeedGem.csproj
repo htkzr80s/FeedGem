@@ -24,6 +24,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+	  <EmbeddedResource Include="Resources\licenses.json" />
 	  <EmbeddedResource Include="Resources\Locales\en-US.json" />
 	  <EmbeddedResource Include="Resources\Locales\ja-JP.json" />
 	</ItemGroup>
@@ -39,8 +40,8 @@
 	<ItemGroup>
 		<PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
 		<PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
-		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.7" />
-		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3912.50" />
-		<PackageReference Include="System.ServiceModel.Syndication" Version="10.0.7" />
+		<PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+		<PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3967.48" />
+		<PackageReference Include="System.ServiceModel.Syndication" Version="10.0.8" />
 	</ItemGroup>
 </Project>

@@ -1,0 +1,140 @@
+[
+  {
+    "PackageId": "H.GeneratedIcons.System.Drawing",
+    "PackageVersion": "2.4.1",
+    "PackageProjectUrl": "https://github.com/HavenDV/H.NotifyIcon",
+    "Authors": "havendv",
+    "Description": "This package allows to generate icons.",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "H.NotifyIcon",
+    "PackageVersion": "2.4.1",
+    "PackageProjectUrl": "https://github.com/HavenDV/H.NotifyIcon",
+    "Authors": "havendv",
+    "Description": "This package allows to create TrayIcon for any platform.",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "H.NotifyIcon.Wpf",
+    "PackageVersion": "2.4.1",
+    "PackageProjectUrl": "https://github.com/HavenDV/H.NotifyIcon",
+    "Authors": "havendv",
+    "Description": "This is an implementation of a NotifyIcon (aka system tray icon or taskbar icon) for the WPF platform. \nIt does not just rely on the Windows Forms NotifyIcon component, \nbut is a purely independent control which leverages several features of the WPF framework in order to display rich tooltips, \npopups, context menus, and balloon messages. It can be used directly in code or embedded in any XAML file.",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "HtmlAgilityPack",
+    "PackageVersion": "1.12.4",
+    "PackageProjectUrl": "http://html-agility-pack.net/",
+    "Copyright": "Copyright \u00A9 ZZZ Projects Inc.",
+    "Authors": "ZZZ Projects,Simon Mourrier,Jeff Klawiter,Stephan Grell",
+    "Description": "This is an agile HTML parser that builds a read/write DOM and supports plain XPATH or XSLT (you actually don\u0027t HAVE to understand XPATH nor XSLT to use it, don\u0027t worry...). It is a .NET code library that allows you to parse \u0022out of the web\u0022 HTML files. The parser is very tolerant with \u0022real world\u0022 malformed HTML. The object model is very similar to what proposes System.Xml, but for HTML documents (or streams).\n\n---------------------------------------\n\nThis library is sponsored by ZZZ Projects:\nhttps://entityframework-extensions.net/\nhttps://eval-expression.net/\nhttps://dapper-plus.net/\n\n---------------------------------------\n\nHAP is trusted by companies worldwide with over 150 million downloads.",
+    "Summary": "This is an agile HTML parser that builds a read/write DOM and supports plain XPATH or XSLT (you actually don\u0027t HAVE to understand XPATH nor XSLT to use it, don\u0027t worry...). It is a .NET code library that allows you to parse \u0022out of the web\u0022 HTML files. The parser is very tolerant with \u0022real world\u0022 malformed HTML. The object model is very similar to what proposes System.Xml, but for HTML documents (or streams).",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "Microsoft.Data.Sqlite",
+    "PackageVersion": "10.0.8",
+    "PackageProjectUrl": "https://docs.microsoft.com/dotnet/standard/data/sqlite/",
+    "Copyright": "\u00A9 Microsoft Corporation. All rights reserved.",
+    "Authors": "Microsoft",
+    "Description": "Microsoft.Data.Sqlite is a lightweight ADO.NET provider for SQLite.\n\nCommonly Used Types:\nMicrosoft.Data.Sqlite.SqliteCommand\nMicrosoft.Data.Sqlite.SqliteConnection\nMicrosoft.Data.Sqlite.SqliteConnectionStringBuilder\nMicrosoft.Data.Sqlite.SqliteDataReader\nMicrosoft.Data.Sqlite.SqliteException\nMicrosoft.Data.Sqlite.SqliteFactory\nMicrosoft.Data.Sqlite.SqliteParameter\nMicrosoft.Data.Sqlite.SqliteTransaction",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "Microsoft.Data.Sqlite.Core",
+    "PackageVersion": "10.0.8",
+    "PackageProjectUrl": "https://docs.microsoft.com/dotnet/standard/data/sqlite/",
+    "Copyright": "\u00A9 Microsoft Corporation. All rights reserved.",
+    "Authors": "Microsoft",
+    "Description": "Microsoft.Data.Sqlite is a lightweight ADO.NET provider for SQLite. This package does not include a copy of the native SQLite library.\n\nCommonly Used Types:\nMicrosoft.Data.Sqlite.SqliteCommand\nMicrosoft.Data.Sqlite.SqliteConnection\nMicrosoft.Data.Sqlite.SqliteConnectionStringBuilder\nMicrosoft.Data.Sqlite.SqliteDataReader\nMicrosoft.Data.Sqlite.SqliteException\nMicrosoft.Data.Sqlite.SqliteFactory\nMicrosoft.Data.Sqlite.SqliteParameter\nMicrosoft.Data.Sqlite.SqliteTransaction",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "Microsoft.NET.ILLink.Tasks",
+    "PackageVersion": "10.0.8",
+    "PackageProjectUrl": "https://dot.net/",
+    "Copyright": "\u00A9 Microsoft Corporation. All rights reserved.",
+    "Authors": "Microsoft",
+    "Description": "MSBuild tasks for running the IL Linker",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "Microsoft.Web.WebView2",
+    "PackageVersion": "1.0.3967.48",
+    "PackageProjectUrl": "https://aka.ms/webview",
+    "Copyright": "\u00A9 Microsoft Corporation. All rights reserved.",
+    "Authors": "Microsoft",
+    "Description": "The WebView2 control enables you to embed web technologies (HTML, CSS, and JavaScript) in your native applications powered by Microsoft Edge (Chromium).\nThis package is necessary for Win32 C/C\u002B\u002B, WPF, and WinForms applications. To learn more about package versions checkout https://aka.ms/wv2-packageversion. To learn best practices checkout: https://aka.ms/wv2-bestpractices.",
+    "License": "BSD-3-Clause",
+    "LicenseUrl": "https://aka.ms/deprecateLicenseUrl",
+    "LicenseInformationOrigin": 5
+  },
+  {
+    "PackageId": "SQLitePCLRaw.bundle_e_sqlite3",
+    "PackageVersion": "2.1.11",
+    "Copyright": "Copyright 2014-2024 SourceGear, LLC",
+    "Authors": "Eric Sink",
+    "Description": "This \u0027batteries-included\u0027 bundle brings in SQLitePCLRaw.core and the necessary stuff for certain common use cases.  Call SQLitePCL.Batteries.Init().  Policy of this bundle: e_sqlite3 included",
+    "License": "Apache-2.0",
+    "LicenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "SQLitePCLRaw.core",
+    "PackageVersion": "2.1.11",
+    "Copyright": "Copyright 2014-2024 SourceGear, LLC",
+    "Authors": "Eric Sink",
+    "Description": "SQLitePCL.raw is a Portable Class Library (PCL) for low-level (raw) access to SQLite.  This package does not provide an API which is friendly to app developers.  Rather, it provides an API which handles platform and configuration issues, upon which a friendlier API can be built.  In order to use this package, you will need to also add one of the SQLitePCLRaw.provider.* packages and call raw.SetProvider().  Convenience packages are named SQLitePCLRaw.bundle_*.",
+    "License": "Apache-2.0",
+    "LicenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "SQLitePCLRaw.lib.e_sqlite3",
+    "PackageVersion": "2.1.11",
+    "Copyright": "Copyright 2014-2024 SourceGear, LLC",
+    "Authors": "Eric Sink",
+    "Description": "This package contains platform-specific native code builds of SQLite for use with SQLitePCLRaw.  To use this, you need SQLitePCLRaw.core as well as one of the SQLitePCLRaw.provider.* packages.  Convenience packages are named SQLitePCLRaw.bundle_*.",
+    "Summary": "SQLitePCLRaw is a Portable Class Library (PCL) for low-level (raw) access to SQLite",
+    "License": "Apache-2.0",
+    "LicenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "SQLitePCLRaw.provider.e_sqlite3",
+    "PackageVersion": "2.1.11",
+    "Copyright": "Copyright 2014-2024 SourceGear, LLC",
+    "Authors": "Eric Sink",
+    "Description": "SQLitePCLRaw is a Portable Class Library (PCL) for low-level (raw) access to SQLite.  Packages named \u0027SQLitePCLRaw.provider.*\u0027 (like this one) are \u0027plugins\u0027 that allow SQLitePCLRaw.core to access the native SQLite library.  This provider does DllImport of \u0027e_sqlite3\u0027, the SQLite builds provided with SQLitePCLRaw.",
+    "License": "Apache-2.0",
+    "LicenseUrl": "https://licenses.nuget.org/Apache-2.0",
+    "LicenseInformationOrigin": 0
+  },
+  {
+    "PackageId": "System.ServiceModel.Syndication",
+    "PackageVersion": "10.0.8",
+    "PackageProjectUrl": "https://dot.net/",
+    "Copyright": "\u00A9 Microsoft Corporation. All rights reserved.",
+    "Authors": "Microsoft",
+    "Description": "Provides classes related to service model syndication.",
+    "License": "MIT",
+    "LicenseUrl": "https://licenses.nuget.org/MIT",
+    "LicenseInformationOrigin": 0
+  }
+]
