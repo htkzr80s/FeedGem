@@ -1,10 +1,12 @@
 # FeedGem (Experimental / AI-Generated)
+<div align="center">
+  
+[![CodeQL](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/htkzr80s/FeedGem/actions/workflows/github-code-scanning/codeql)
+[![Windows x64](https://img.shields.io/badge/Platform-Windows_x64-blue?style=for-the-badge)](https://github.com/htkzr80s/FeedGem/releases/)
+[![.NET 10](https://img.shields.io/badge/.NET-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/download/dotnet/10.0/runtime)
+[![MIT LICENSE](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE "License")
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Status-Experimental-orange?style=for-the-badge" alt="Status">
-  <img src="https://img.shields.io/badge/Platform-Windows_x64-blue?style=for-the-badge" alt="Platform">
-  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="License">
-</p>
+</div>
 
 ![Main](FeedGem/Resources/Images/MainWindow.png)
 
