@@ -1,0 +1,33 @@
+FeedGem v1.0.1 Release Notes
+Date: May 15, 2026
+
+Changes
+
+License Information
+Added an "About" section in Settings to display the app version, GitHub link, and third-party licenses.
+
+UI Improvements
+Introduced custom scrollbar styles that adapt to both Dark and Light themes.
+
+Feed Discovery
+Fixed the maximum number of feed candidates to 3 to improve response speed and reduce server load.
+
+System Updates
+Updated internal components and NuGet packages for better stability.
+
+--------
+
+FeedGem v1.0.1 リリースノート
+日付: 2026年5月15日
+
+ライセンス表示
+設定画面にアプリのバージョン情報やGitHubへのリンク、ライセンス情報を表示する機能を追加しました。
+
+UI
+ダーク・ライト各テーマに合わせたスクロールバーを導入しました。
+
+フィード探索
+URL探索時の最大候補数を3で固定しました。
+
+内部システムの更新
+使用しているコンポーネントをアップデートしました。

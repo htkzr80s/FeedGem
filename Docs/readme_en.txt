@@ -51,8 +51,6 @@ Troubleshooting: If the application behaves unexpectedly after making changes,
 
 Advanced Settings Parameters
 
-MaxCandidateCount=5: The maximum number of feed candidates to display.  
-
 MaxArticleCount=30: The maximum number of articles to store in the database for each feed.  
 
 AllowInsecureHttp=False: Set whether to allow unencrypted communication (HTTP).
