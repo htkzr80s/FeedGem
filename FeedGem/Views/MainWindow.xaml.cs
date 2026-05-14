@@ -476,7 +476,7 @@ namespace FeedGem.Views
                 var candidates = await FeedDiscoveryService.DiscoverFeedsAsync(url);
 
                 // candidates.Count がこの値に達していれば「上限に達した」と判断できる
-                bool isLimitReached = candidates.Count >= AppSettings.MaxCandidateCount;
+                bool isLimitReached = candidates.Count >= AppConstants.MaxCandidateCount;
 
                 Mouse.OverrideCursor = null;
 

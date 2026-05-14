@@ -68,20 +68,20 @@ namespace FeedGem.Services
             {
                 foreach (var candidate in ParseFeedLinksFromHtml(html, secureUrl))
                 {
-                    if (candidates.Count >= AppSettings.MaxCandidateCount) break;
+                    if (candidates.Count >= AppConstants.MaxCandidateCount) break;
                     if (!candidates.Any(c => NormalizeUrl(c.Url) == NormalizeUrl(candidate.Url)))
                         candidates.Add(candidate);
                 }
             }
 
-            if (candidates.Count >= AppSettings.MaxCandidateCount) return candidates;
+            if (candidates.Count >= AppConstants.MaxCandidateCount) return candidates;
 
             // 3. パス推測フェーズ（負荷を考慮し、少し待機を入れる）
             if (!Uri.TryCreate(secureUrl, UriKind.Absolute, out var baseUri)) return candidates;
 
             foreach (var path in CommonPaths)
             {
-                if (candidates.Count >= AppSettings.MaxCandidateCount) break;
+                if (candidates.Count >= AppConstants.MaxCandidateCount) break;
 
                 // 連続アクセスによるBAN・bot判定を避けるため、間隔をランダムにする
                 int delayMs = rng.Next(1000, 2000);
@@ -97,10 +97,10 @@ namespace FeedGem.Services
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
                 {
-                        // 403 が返ってきたらこのサーバーへの推測アクセスを即座に中止する
-                        LoggingService.DebugOnly($"Discovery: 403 during path probing. Stopping. ({baseUri.Host})");
-                        break;
-                    }
+                    // 403 が返ってきたらこのサーバーへの推測アクセスを即座に中止する
+                    LoggingService.DebugOnly($"Discovery: 403 during path probing. Stopping. ({baseUri.Host})");
+                    break;
+                }
             }
 
             return candidates;
@@ -179,7 +179,7 @@ namespace FeedGem.Services
                 foreach (var node in nodes)
                 {
                     // 設定された最大件数を超えたら解析を中止
-                    if (candidates.Count >= AppSettings.MaxCandidateCount) break;
+                    if (candidates.Count >= AppConstants.MaxCandidateCount) break;
 
                     string rel = node.GetAttributeValue("rel", "");
                     string typeAttr = node.GetAttributeValue("type", "");

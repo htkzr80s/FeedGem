@@ -98,7 +98,6 @@ namespace FeedGem.Services
         public double WindowHeight { get; set; } = 800;
         public double FeedTreeWidth { get; set; } = 250;
         public double ArticleListWidth { get; set; } = 450;
-        public int MaxCandidateCount { get; set; } = 10;
         public int MaxArticleCount { get; set; } = 30;
         public static bool AllowInsecureHttp { get; set; } = false;
     }
