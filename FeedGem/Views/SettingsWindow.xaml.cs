@@ -1,4 +1,5 @@
 ﻿using FeedGem.Services;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using static FeedGem.Services.LocalizationService;
@@ -11,8 +12,13 @@ namespace FeedGem.Views
         private readonly string _originalTheme;
         private readonly string _originalLanguage;
 
+        public string AppVersion { get; set; }
+
         public SettingsWindow()
         {
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+            AppVersion = $"v{version?.Major}.{version?.Minor}.{version?.Build}";
+
             InitializeComponent();
 
             // 現在の設定をロード
@@ -37,6 +43,8 @@ namespace FeedGem.Views
 
             // 翻訳を適用
             ApplyTranslations();
+
+            this.DataContext = this;
 
             this.Unloaded += Window_Unloaded;
         }
@@ -131,6 +139,27 @@ namespace FeedGem.Views
 
             DialogResult = false;
             Close();
+        }
+
+        private void GithubLink_Click(object sender, RoutedEventArgs e)
+        {
+            string url = "https://github.com/htkzr80s/FeedGem";
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true // WindowsでURLを直接開くために必要
+            });
+        }
+
+        private void LicenseLink_Click(object sender, RoutedEventArgs e)
+        {
+            var licenseWin = new LicenseWindow
+            {
+                Owner = this
+            };
+
+            licenseWin.ShowDialog();
         }
 
         private void ApplyTranslations()

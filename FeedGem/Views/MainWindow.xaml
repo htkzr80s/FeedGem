@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:tb="clr-namespace:H.NotifyIcon;assembly=H.NotifyIcon.Wpf"
         xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="FeedGem v1.0.0" Height="800" Width="1400"
+        Title="FeedGem" Height="800" Width="1400"
         WindowStartupLocation="Manual"
         Background="{DynamicResource WindowBackgroundBrush}">
 
