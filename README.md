@@ -48,16 +48,16 @@ Please read the following carefully before using this software:
 
 ---
 
-## 🛠 Libraries (NuGet)
-This project utilizes the following libraries:
+## 🛠 Libraries & Licenses
+This project uses several third-party libraries.
+For a complete list of dependencies and their respective license notices,
+please refer to the following documents:
 
-| Library | Purpose |
-| :--- | :--- |
-| `System.ServiceModel.Syndication` | Feed parsing |
-| `Microsoft.Data.Sqlite` | Database management |
-| `HtmlAgilityPack` | HTML parsing |
-| `Microsoft.Web.WebView2` | Web content rendering |
-| `H.NotifyIcon.Wpf` | System tray notifications |
+
+[Dependency List](./Docs/DEPENDENCIES.md) : A comprehensive list of NuGet packages and their purposes.   
+
+
+[Third-Party Notices](./Docs/ThirdPartyNotices.txt) : Full license texts for all included software.
 
 ---
 
@@ -108,16 +108,12 @@ See the [LICENSE](./LICENSE) file for more details.
 
 ---
 
-## 🛠 使用ライブラリ (NuGet)
-主要な機能を実現するために、以下のライブラリを使用しています。
+## 🛠 ライブラリとライセンス
+このプロジェクトは複数のサードパーティライブラリを使用しています。依存関係とそのライセンスに関する通知の完全なリストについては、以下のドキュメントを参照してください。
 
-| ライブラリ名 | 用途 |
-| :--- | :--- |
-| `System.ServiceModel.Syndication` | フィードの解析 |
-| `Microsoft.Data.Sqlite` | データベース管理 |
-| `HtmlAgilityPack` | HTML解析 |
-| `Microsoft.Web.WebView2` | 記事表示用ブラウザ |
-| `H.NotifyIcon.Wpf` | タスクトレイ通知 |
+[Dependency List](./Docs/DEPENDENCIES.md) : NuGetパッケージとその用途の包括的なリスト。
+
+[Third-Party Notices](./Docs/ThirdPartyNotices.txt) : 含まれるすべてのソフトウェアのライセンス全文。
 
 ---
 

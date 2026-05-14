@@ -18,9 +18,10 @@
 		<Description>FeedGem</Description>
 		<Copyright>© 2026 htkzr80s</Copyright>
 		<NeutralLanguage>ja-JP</NeutralLanguage>
-		<AssemblyVersion>1.0.0</AssemblyVersion>
-		<Version>1.0.0</Version>
+		<AssemblyVersion>1.0.1</AssemblyVersion>
+		<Version>1.0.1</Version>
 		<PackageId>FeedGem</PackageId>
+		<FileVersion>1.0.1</FileVersion>
 	</PropertyGroup>
 
 	<ItemGroup>
